@@ -1,0 +1,253 @@
+##LOAD FILE and libraries 
+
+```{r, library to load}
+library(tidyverse)
+library(dplyr)
+library(tidyr)
+library(ggplot2)
+library(ggforce)
+library(ggfortify)
+library(vegan)
+library(RColorBrewer)
+library(randomcoloR)
+library(writexl)
+library(readxl)
+```
+```{r}
+diatoms_rare <- read_csv("~/PHD/BPA_Metadata_Analysis/R_Notebook/diatoms_rare_070521.csv")
+diatoms_rare$uniqcode <- factor(diatoms_rare$uniqcode, levels =rev(c("MAI", "KAI", "PHB","ROT", "NSI", "YON", "DAR")))
+diatoms_rare <- diatoms_rare %>% filter(year > 2014)
+diatoms_surf <- diatoms_rare %>% filter(depth_m == 2)
+```
+```{r}
+#Colours used for the NRS station
+display.brewer.pal(9, "Set1")
+brewer.pal(9, "Set1")
+#DAR = "#E41A1C", YON = "#377EB8", NSI = "#4DAF4A", ROT = "#984EA3", PHB = "#FF7F00", KAI = "#FFFF33", MAI = "#A65628"
+```
+```{r}
+mycols73 <- c("#99EEFF","#33BBFF","#33DDFF","#086391","#5299E0","#007FFF","#004C99","#0dc9e5","#054261","#9EFADD","#73F1CA","#52E4BB","#3BCFAB","#2BB398","#A0E0F7","#7ECEED","#64B8DE","#4F9CC7","#3E7EA9","#ADBAFA","#899AF1","#6C7EE4","#5667CF","#4352B3","#D8BBFB","#C094F4","#AC74E8","#985CD5","#8548BB","#58156c","#F4C5FD","#EDA7F9","#E380EF","#D863DE","#C44CBF","#b43dd8","#FDC9E1","#FAADCF","#F189B4","#E46C98","#C74F6F","#FCBBBC","#ED7E80","#D75D5F","#E83535","#A93E3F","#8B4513","#A0522D","#A96928","#BD7E32","#CF923E","#DEA54D","#E9B65F","#724407","#F18109","#F29B0F","#F3B516","#F4CF1D","#FBFFB2","#A92A28","#BD3532","#D74945","#E45B55","#ED6F6A","#B8F792","#92ED6A","#6ADE4D","#3EC737","#28A93A","#99C745","#75A12D","#26912A","#1A6E20")
+```
+
+## Figure 1 (NRS station MAP) 
+```{r}
+#Load specific library
+library(maps)
+library(mapdata)
+library(ncdf4)
+library(oce)
+library(rnaturalearthdata)
+library(rnaturalearth)
+library(rgeos)
+```
+```{r}
+# To create a dataframe with the coordinate of the NRS station 
+labs <- data.frame(
+  lat = c(-12.4634, -27.5323, -32.0064, -19.4591, -34.0692, -35.7752, -42.6451), 
+  long = c(130.8456, 153.4626, 115.5073, 147.4805, 151.125, 137.2142, 148.065), 
+  names = c("Darwin", "North Stradbroke Island", "Rottnest Island", "Yongala", "Port Hacking", "Kangaroo Island", "Maria Island"), 
+  stringsAsFactors = FALSE
+)
+```
+```{r}
+sst01 <- nc_open("~/PHD/BPA_Metadata_Analysis/SST_OceanCoor_DataMAP/AQUA_MODIS.20150101_20151231.L3m.YR.NSST.sst.4km.nc");
+sst01.d<-ncvar_get(sst01, 'sst') 
+sst01.d[sst01.d>42.00072]<-NA  
+sstlon <- ncvar_get(sst01, 'lon')
+sstlat <- ncvar_get(sst01, 'lat')
+```
+```{r}
+sstL<-vector('list', length(sst01.d))
+sstL <-as.vector(sst01.d-273.15)
+## Arrange the data into long format for ggplot
+longitude<- rep(sstlon, length(sstlat))
+latitude  <- NA
+for (i in seq_along(sstlat)){
+  latitude <-c(latitude , rep(sstlat[i],length(sstlon)))
+}
+sst=as.vector(sstL)
+SSTlong<-as.data.frame(cbind(lat=latitude[1:length(sst)], lon=longitude[1:length(sst)], sst=as.vector(sstL)))
+```
+```{r}
+xrange <- c(105,162)
+yrange <- c (-50, -6)
+imagep(sstlon, sstlat, sst01.d, col=oceColorsTemperature(255), filledContour=T, missingColor=0, zlab='SST', xlim = xrange, ylim = yrange, asp=1); #zlim=c(10,28)
+map('worldHires', xlim = xrange, ylim = yrange, fill=T, col="#e2dfdf", add=T, lwd=0.5, border=NA)
+grid() 
+title(xlab = 'Longitude',
+        ylab = 'Latitude')
+points(labs$lon, labs$lat, pch=16, col="black", size = 2)
+text(labs$lon, labs$lat,labels=labs$names, cex=1.5)
+```
+
+## Figure 2 (barplot - Genera RA/sites
+```{r}
+#To calculate average abundance across the entire dataset
+subset <-  diatoms_surf %>% select("FG", "sample", "abund_rare", "uniqcode", "date_utc")
+subset_total <- subset %>% group_by(date_utc, FG, uniqcode) %>% summarise(newtot = sum(abund_rare))
+subset_total2 <- subset_total %>% group_by(uniqcode) %>% summarise(sitetot = sum(newtot)) 
+subset_total3 <- subset_total2 %>% left_join(subset_total)
+subset_ra <- subset_total3 %>% group_by(date_utc, FG, uniqcode) %>% summarise(genusra = (newtot / sitetot)*100)
+subset_ra <- na.omit(subset_ra)
+subset_ra_genus <- subset_ra %>% group_by(FG, uniqcode) %>% dplyr::summarise(genustot = sum(genusra))
+```
+```{r}
+#Colors and order of the Genera for figure 2
+mycols71 <- c("#33BBFF","#33DDFF","#086391","#5299E0","#007FFF","#004C99","#0dc9e5","#054261","#9EFADD","#73F1CA","#52E4BB","#3BCFAB","#2BB398","#A0E0F7","#7ECEED","#64B8DE","#4F9CC7","#3E7EA9","#ADBAFA","#899AF1","#6C7EE4","#5667CF","#4352B3","#D8BBFB","#C094F4","#AC74E8","#985CD5","#8548BB","#F4C5FD","#EDA7F9","#E380EF","#D863DE","#C44CBF","#b43dd8","#FDC9E1","#FAADCF","#F189B4","#E46C98","#C74F6F","#FCBBBC","#ED7E80","#D75D5F","#E83535","#A93E3F","#A0522D","#A96928","#BD7E32","#CF923E","#DEA54D","#E9B65F","#724407","#F18109","#F29B0F","#F3B516","#F4CF1D","#FBFFB2","#A92A28","#BD3532","#D74945","#E45B55","#ED6F6A","#B8F792","#92ED6A","#6ADE4D","#3EC737","#28A93A","#99C745","#75A12D","#26912A","#1A6E20")
+FG.order<-c("Radial-centric-basal-Coscinodiscophyceae;Actinocyclus","Raphid-pennate;Amphora","Araphid-pennate;Araphid-pennate_X","Araphid-pennate;g__unassigned","Polar-centric-Mediophyceae;Arcocellulus","Araphid-pennate;Asterionellopsis","Radial-centric-basal-Coscinodiscophyceae;Asteromphalus","Polar-centric-Mediophyceae;Attheya","Raphid-pennate;Bacillaria","Polar-centric-Mediophyceae;Bellerochea","Polar-centric-Mediophyceae;Biddulphia","Polar-centric-Mediophyceae;Brockmanniella","Polar-centric-Mediophyceae;Cerataulina","Radial-centric-basal-Coscinodiscophyceae;Corethron","Radial-centric-basal-Coscinodiscophyceae;Coscinodiscus","Polar-centric-Mediophyceae;Cyclotella","Raphid-pennate;Cymbella","Polar-centric-Mediophyceae;Dactyliosolen","Araphid-pennate;Delphineis","Polar-centric-Mediophyceae;Detonula","Polar-centric-Mediophyceae;Ditylum","Raphid-pennate;Entomoneis","Raphid-pennate;Epithemia","Polar-centric-Mediophyceae;Eucampia","Polar-centric-Mediophyceae;Eunotogramma","Raphid-pennate;Fragilariopsis","Radial-centric-basal-Coscinodiscophyceae;Guinardia","f__unassigned;g__unassigned","Raphid-pennate;Haslea","Polar-centric-Mediophyceae;Helicotheca","Polar-centric-Mediophyceae;Hemiaulus","Radial-centric-basal-Coscinodiscophyceae;Hemidiscaceae_X","Polar-centric-Mediophyceae;Lauderia","Araphid-pennate;Licmophora","Araphid-pennate;Licmosphenia","Polar-centric-Mediophyceae;Lithodesmium","Raphid-pennate;Luticola","Raphid-pennate;Meuniera","Polar-centric-Mediophyceae;Minidiscus","Polar-centric-Mediophyceae;Minutocellus","Raphid-pennate;Navicula","Polar-centric-Mediophyceae;Odontella","Radial-centric-basal-Coscinodiscophyceae;Palmerina","Polar-centric-Mediophyceae;Papiliocellulus","Raphid-pennate;Pleurosigma","Polar-centric-Mediophyceae;Polar-centric-Mediophyceae_X","Polar-centric-Mediophyceae;g__unassigned","Polar-centric-Mediophyceae;Porosira","Radial-centric-basal-Coscinodiscophyceae;Proboscia","Raphid-pennate;Psammodictyon","Raphid-pennate;Raphid-pennate_X","Raphid-pennate;g__unassigned","Radial-centric-basal-Coscinodiscophyceae;Stellarima","Polar-centric-Mediophyceae;Stephanodiscus","Radial-centric-basal-Coscinodiscophyceae;Stephanopyxis","Radial-centric-basal-Coscinodiscophyceae;g__unassigned","Raphid-pennate;Surirella","Araphid-pennate;Talaroneis","Araphid-pennate;Thalassionema","Araphid-pennate;Thalassiothrix","Polar-centric-Mediophyceae;Triceratium","Polar-centric-Mediophyceae;Bacteriastrum","Raphid-pennate;Cylindrotheca","Radial-centric-basal-Coscinodiscophyceae;Leptocylindrus","Raphid-pennate;Nitzschia","Radial-centric-basal-Coscinodiscophyceae;Rhizosolenia","Polar-centric-Mediophyceae;Skeletonema","Raphid-pennate;Pseudo-nitzschia","Polar-centric-Mediophyceae;Thalassiosira","Polar-centric-Mediophyceae;Chaetoceros") 
+names(mycols71) <- unique(FG.order)
+#names(mycols85) <- unique(subset_ra_genus$tax.Genus.y)
+```
+```{r}
+# Plot the Relative Abundance of each Genera (+Family) per site across all sample
+fig2 <- ggplot(subset_ra_genus, aes(x=uniqcode, y=genustot, fill = factor(FG, levels = c(FG.order)))) + 
+        geom_bar(stat='identity', colour="black", size=0.25, ) +  
+        theme(legend.position='right') + 
+        scale_fill_manual(values = mycols71, "Family - Genus sp.") + 
+        guides(fill=guide_legend(ncol=2)) + 
+        theme_bw() +
+        theme(panel.grid.major = element_blank(), # element_line(colour = "#d3d3d3") (light grey)
+            panel.grid.minor = element_blank(),
+            panel.background = element_blank(),
+            plot.title = element_text(size = 12, family = "Tahoma", face = "bold"),
+            legend.title = element_text(family = "Tahoma", size=12, face= "bold" ),
+            text=element_text(family = "Tahoma"),
+            legend.text = element_text(face = "italic"),
+            axis.title = element_text(size = 15), 
+            axis.title.y = element_text(margin = margin(t = 0, r = 20, b = 0, l = 0)),
+            axis.title.x = element_text(margin = margin(t = 20, r = 0, b = 0, l = 0)),
+            axis.text.x = element_text(face = "bold", colour="black", size = 16),
+            axis.text.y = element_text(colour="black", size = 12),
+            axis.line = element_line(size=0.5, colour = "black"), 
+            axis.ticks.length.x = unit(0.25, "cm"),
+            axis.ticks.length.y = unit(0.25, "cm")) +  
+        labs(y = "Proportion (%)", 
+             x = "") 
+
+fig2  
+```
+
+## Figure 3 (CCA)
+```{r}
+##Laod the filr with the average alphae diversity of bacteria
+bac_CCA_FamilyAV <- read.csv("~/PHD/BPA_Metadata_Analysis/bac_CCA_FamilyAV_080821.csv") 
+##to add the bacteria alpha diversity indices
+diatoms_alpha <- left_join(diatoms_surf, alpha_bac)
+diatoms_fam <- left_join(diatoms_surf, bac_CCA_FamilyAV)
+```
+```{r}
+#Make a subset with only what you need for the CCA
+diatoms_sub <- ungroup(diatoms_fam) %>% dplyr::select("sample", "uniqcode", "date_utc", "GID", "day_length", "temperature_deg_c", "silicate_umol_per_l", "phosphate_umol_per_l", "nitrate_nitrite_umol_per_l", "ammonium_umol_per_l", "abund_rare", "Flavobacteriaceae", "Marinobacteraceae", "Rhodobacteraceae", "Clade.I", "Alteromonadaceae", "Alteromonadaceae_Marinobacter", "Actinomarinaceae") %>% spread(key = GID, value = abund_rare, fill=0) 
+# Square-root transform all the independent variables for the cca
+diatoms_sub$day_length <- sqrt(diatoms_sub$day_length)
+diatoms_sub$temperature_deg_c <- sqrt(diatoms_sub$temperature_deg_c)
+diatoms_sub$silicate_umol_per_l <- sqrt(diatoms_sub$silicate_umol_per_l)
+diatoms_sub$phosphate_umol_per_l <- sqrt(diatoms_sub$phosphate_umol_per_l)
+diatoms_sub$nitrate_nitrite_umol_per_l <- sqrt(diatoms_sub$nitrate_nitrite_umol_per_l)
+diatoms_sub$ammonium_umol_per_l <- sqrt(diatoms_sub$ammonium_umol_per_l)
+diatoms_sub$Flavobacteriaceae <- sqrt(diatoms_sub$Flavobacteriaceae)
+diatoms_sub$Marinobacteraceae <- sqrt(diatoms_sub$Marinobacteraceae)
+diatoms_sub$Rhodobacteraceae <- sqrt(diatoms_sub$Rhodobacteraceae)
+diatoms_sub$Alteromonadaceae <- sqrt(diatoms_sub$Alteromonadaceae)
+diatoms_sub$Actinomarinaceae <- sqrt(diatoms_sub$Actinomarinaceae)
+diatoms_sub$Alteromonadaceae_Marinobacter <- sqrt(diatoms_sub$Alteromonadaceae_Marinobacter)
+diatoms_sub$Clade.I <- sqrt(diatoms_sub$Clade.I)
+```
+```{r}
+#Make a diatoms matrix 
+diatoms_sub <- na.omit(diatoms_sub)
+diatoms_sub <- diatoms_sub %>% arrange(sample) 
+com.matrix <-  as.matrix(diatoms_sub[,-c(1:16)]) 
+row.names(com.matrix)<- diatoms_sub$sample
+com.matrix.nz <- com.matrix[,colSums(com.matrix)!=0] 
+```
+```{r}
+#Make an environmental data frame 
+env_data <- ungroup(diatoms_sub) %>% dplyr::select("sample", "uniqcode", "day_length", "temperature_deg_c", "silicate_umol_per_l", "phosphate_umol_per_l", "nitrate_nitrite_umol_per_l", "ammonium_umol_per_l", "Flavobacteriaceae", "Rhodobacteraceae", "Clade.I", "Alteromonadaceae_Marinobacter", "Alteromonadaceae", "Marinobacteraceae", "Actinomarinaceae") 
+env_data <- distinct(env_data)
+env_data <- env_data %>% arrange(sample)
+rownames(env_data) <- env_data$sample
+env_data$uniqcode <- as.factor(env_data$uniqcode)
+#Rename the variables
+names(env_data)[names(env_data) == "temperature_deg_c"] <- "Temperature"
+names(env_data)[names(env_data) == "day_length"] <- "Daylength"
+names(env_data)[names(env_data) == "silicate_umol_per_l"] <- "Silicate"
+names(env_data)[names(env_data) == "phosphate_umol_per_l"] <- "Phosphate"
+names(env_data)[names(env_data) == "nitrate_nitrite_umol_per_l"] <- "Nitrate"
+names(env_data)[names(env_data) == "ammonium_umol_per_l"] <- "Ammonium"
+names(env_data)[names(env_data) == "Clade.I"] <- "SAR11"
+#Create a new column with the NRS station full name
+env_data <- env_data %>% mutate(sites = NA)
+env_data$sites[str_detect(env_data$uniqcode, "PHB")] <- "Port Hacking"
+env_data$sites[str_detect(env_data$uniqcode, "NSI")] <- "North Stradbroke Island"
+env_data$sites[str_detect(env_data$uniqcode, "ROT")] <- "Rottnest Island"
+env_data$sites[str_detect(env_data$uniqcode, "KAI")] <- "Kangaroo Island"
+env_data$sites[str_detect(env_data$uniqcode, "MAI")] <- "Maria Island"
+env_data$sites[str_detect(env_data$uniqcode, "DAR")] <- "Darwin"
+env_data$sites[str_detect(env_data$uniqcode, "YON")] <- "Yongala"
+env_data$sites <- as.factor(env_data$sites)
+env_data$sites <- factor(env_data$sites, levels =rev(c("Maria Island", "Kangaroo Island", "Port Hacking","Rottnest Island", "North Stradbroke Island", "Yongala", "Darwin")))
+```
+```{r}
+#Run the CCA
+cca.1 <- cca(com.matrix.nz ~ uniqcode + Temperature + Daylength + Silicate + Phosphate +  Nitrate + Ammonium + Rhodobacteraceae + Alteromonadaceae_Marinobacter + Actinomarinaceae + Flavobacteriaceae + SAR11 , data=env_data) 
+cca.1
+```
+```{r}
+library(goeveg)
+##Select the top 5% most frequent species with 60% best fit
+cca_env <- envfit(cca.1, env_data[,2:12], choices=c(1,3))
+ASV_bestfit <- ordiselect(com.matrix.nz, cca.1, ablim = 0.10, fitlim = 0.6, method = "vars", env = cca_env)
+ASV_bestfitb <- as.data.frame(ASV_bestfit)
+ASV_bestfitb <- str_replace_all(ASV_bestfitb$ASV_bestfit, "[.]", ";")
+```
+```{r}
+ASV.order2 <- c("euk;Ditylum;Eb1003529","euk;Skeletonema;Eb1004021","euk;Skeletonema;Eb1000789", "euk;Skeletonema;Eb1001219","euk;Thalassiosira;Eb1000926","euk;Chaetoceros;Eb1002525","euk;Chaetoceros;Eb1003010","euk;Chaetoceros;Eb1001502","euk;Thalassiosira;Eb1001204","euk;Guinardia;Eb1001443","euk;Rhizosolenia;Eb1000407","euk;Skeletonema;Eb1000106","euk;Chaetoceros;Eb1000043","euk;Cyclotella;Eb1000297","euk;Cylindrotheca;Eb1000744","euk;Chaetoceros;Eb1001960","euk;Chaetoceros;Eb1001731","euk;Chaetoceros;Eb1002800","euk;Bacteriastrum;Eb1002531","euk;Chaetoceros;Eb1001922","euk;Eucampia;Eb1000686","euk;Chaetoceros;Eb1001313","euk;Skeletonema;Eb1000943","euk;Bacteriastrum;Eb1000935","euk;Chaetoceros;Eb1002318","euk;Chaetoceros;Eb1001275","euk;Chaetoceros;Eb1000827","euk;Bacteriastrum;Eb1001530","euk;Chaetoceros;Eb1003001","euk;Bacteriastrum;Eb1002598","euk;Proboscia;Eb1001601","euk;Leptocylindrus;Eb1002870","euk;Bacteriastrum;Eb1001648","euk;Chaetoceros;Eb1003098","euk;Palmerina;Eb1007296","euk;Cylindrotheca;Eb1002909","euk;Skeletonema;Eb1001523","euk;Navicula;Eb1002331","euk;Skeletonema;Eb1006123","euk;Odontella;Eb1005153","euk;Thalassiosira;Eb1005861","euk;Chaetoceros;Eb1005179")
+```
+```{r}
+#PLOT the CCA
+#Check the attributes
+scrs <- scores(cca.1,display=c("sp","wa","lc","bp","cn"))
+attributes(scrs)
+#Extract data and set up vectors for arrows - SITES
+df_sites <- data.frame(scrs$sites) #,t(as.data.frame(strsplit(rownames(scrs$sites),"_")))
+df_sites <- rownames_to_column(df_sites, "sample")
+#Extract data and set up vectors for arrows - SPECIES (ASVs)
+df_species <- data.frame(scrs$species)
+df_species_arrow <- rownames_to_column(df_species, "labels")
+#Extract data and set up vectors for arrows - ENV VAR
+df_biplot <- data.frame(scrs$biplot)
+df_biplot_arrow <- rownames_to_column(df_biplot, "labels")
+df_env_arrow <- df_biplot_arrow %>% filter(labels %in% c("Temperature", "Daylength", "Silicate", "Phosphate", "Nitrate", "Ammonium", "Flavobacteriaceae",  "Rhodobacteraceae", "SAR11", "Alteromonadaceae_Marinobacter", "Actinomarinaceae")) 
+df_uniqcode_arrow <- df_biplot_arrow %>% filter(labels %in% c("uniqcodeYON", "uniqcodeNSI", "uniqcodeROT", "uniqcodePHB", "uniqcodeKAI", "uniqcodeMAI"))
+#Format the arrows 
+arrowhead = arrow(length = unit(0.2, "cm"))
+#To filter and select the 10% most abundant and 60% best fitting ASVs
+sp3 <- read_excel("~/PHD/BPA_Metadata_Analysis/R_Notebook/ASVs_selection_CCA_290721.xlsx")
+mycolv<- sp3$col
+names(mycolv) <- sp3$Label
+#Plot the CCA using ggplot
+p1 <- ggplot(df_sites, aes(x = CCA1, y = CCA2)) + 
+  geom_point(data = df_sites, aes(colour = env_data$uniqcode), size = 3, pch =16) +
+  geom_segment(data = df_env_arrow, aes(x = 0, y = 0, xend = CCA1, yend = CCA2), 
+               arrow = arrowhead, size = 1, colour = "black") + 
+  geom_point(data = sp3, aes(x=CCA1, y =CCA2, fill = factor(Label, levels = c(ASV.order2))), size = 4, pch = 22) +  
+  geom_text(data = df_env_arrow, aes(x=1.8 *CCA1,y=1.8 *CCA2,label=labels), size=5) + 
+  geom_abline(intercept = 0,slope = 0,linetype="dashed", size=0.8) + 
+  geom_vline(aes(xintercept=0), linetype="dashed", size=0.8) + 
+  coord_fixed() +
+  scale_fill_manual("ASVid", values = mycolv) +
+  scale_colour_brewer("NRS station", palette = "Set1") +
+  theme(legend.position = "right") +
+  guides(fill=guide_legend(ncol=2)) + 
+  theme(legend.justification = c(0,0), axis.text = element_text(family = "Arial",  colour = "black", size = 20),
+        axis.title = element_text(family = "Arial", size = 25),
+        text = element_text(family = "Arial", size = 20)) +
+  theme_bw(base_size = 15) 
+p1
+```
+
+
+
+
+
