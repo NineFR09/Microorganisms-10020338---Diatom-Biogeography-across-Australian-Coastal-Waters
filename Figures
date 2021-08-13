@@ -352,5 +352,43 @@ plot_sim
 #ggsave(filename = "Figure4A_SIMILARITY_RArarefied_080521.jpg", plot_sim, height=10, width=13, units='in', device='jpg', dpi=600)
 ```
 
+## Figure 3B (Temporal barplot)
+```{r}
+#Make a subset of the all dataset 
+diatoms.temp <- diatoms_rare %>%  filter(uniqcode %in% c("NSI", "PHB", "MAI")) 
+diatoms.temp <- diatoms.temp %>%  filter(year %in% c("2017", "2018", "2019"))
+diatoms.temp <- diatoms.temp %>% filter(depth_m ==2)
+plot.temp <- ungroup(diatoms.temp) %>% select("tax.Genus", "RA.percent", "uniqcode", "year", "month.abb", "date_utc", "season", "Prop_diatoms_phyto") 
+```
+```{r}
+#Temporal PLOT
+temp_plot <- ggplot(plot.temp, aes(x=date_utc, y=RA.percent, fill=factor(tax.Genus, levels = c(Genus.order)))) + 
+  geom_bar(stat='identity',width = 15, position = position_fill()) +  
+  facet_grid(uniqcode ~ .) +
+  theme(axis.text.x = element_text(angle = 90)) +
+  theme(legend.title = element_text(colour= "black", size=12, face= "bold" ))+
+  theme(legend.position = "right") +
+  guides(fill=guide_legend(ncol=2)) +    
+  theme_bw() +
+  theme(panel.grid.major = element_line(colour = "#d3d3d3"),
+              panel.grid.minor = element_blank(),
+              #panel.border = element_blank(),
+              panel.background = element_blank(),
+              plot.title = element_text(size = 14, family = "Arial", face = "bold"),
+              text=element_text(family = "Arial"),
+              axis.title = element_text(size = 20, family = "Arial",face="bold"),
+              axis.text.x = element_text(colour="black", size = 18, face = "bold", angle = 65, vjust = 0.6),
+              axis.text.y = element_text(colour="black", size = 18),
+              axis.line = element_line(size=0.5, colour = "black"),
+              legend.title = element_text(colour= "black", size=12, face= "bold" ),
+              legend.text = element_text(face = "italic")) +
+  scale_fill_manual(values = mycols73, "Genus sp.") +
+  labs(y = "Relative Abundance", x = "")
+
+temp_plot
+##SVG dimension, width = 1200, height = 600
+#ggsave("Figure4B_BARPLOT_RArarefied_nothreshold_080521.jpg", temp_plot, height=10, width=13, units='in', device='jpg', dpi=600)
+```
+
 
 
