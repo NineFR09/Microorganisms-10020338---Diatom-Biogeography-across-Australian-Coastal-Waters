@@ -1,4 +1,4 @@
-##LOAD FILE and libraries 
+##Load 18S and 16S rarefied files + libraries 
 
 ```{r, library to load}
 library(tidyverse)
@@ -15,10 +15,26 @@ library(writexl)
 library(readxl)
 ```
 ```{r}
-diatoms_rare <- read_csv("~/PHD/BPA_Metadata_Analysis/R_Notebook/diatoms_rare_070521.csv")
+#Diatoms
+diatoms_rare <- read_csv("~/diatoms_rare_070521.csv")
 diatoms_rare$uniqcode <- factor(diatoms_rare$uniqcode, levels =rev(c("MAI", "KAI", "PHB","ROT", "NSI", "YON", "DAR")))
-diatoms_rare <- diatoms_rare %>% filter(year > 2014)
+diatoms_rare <- diatoms_rare %>% filter(year > 2014)  
 diatoms_surf <- diatoms_rare %>% filter(depth_m == 2)
+```
+```{r}
+#Bacteria 
+bac_rare <- read_csv("~/bac_nrs_rare20k.nine.060521.csv") 
+bac_rare$uniqcode <- factor(bac_rare$uniqcode, levels =rev(c("MAI", "KAI", "PHB","ROT", "NSI", "YON", "DAR")))
+bac_rare <- bac_rare %>% separate(utc_date_sampled_yyyymmdd , c('year','month','day'), sep='-', remove=F)
+bac_rare <- bac_rare %>% filter(year > 2014) 
+colnames(bac_rare)[colnames(bac_rare) == "code"] <- "sample"
+bac_rare <- bac_rare %>% unite('FG', c(tax.Family, tax.Genus), remove = F, sep = ';')
+bac_rare <- bac_rare %>% unite('OFG', c(tax.Order, FG), remove=F, sep=';')
+bac_rare <- bac_rare %>% unite('OF', c(tax.Order, tax.Family), remove=F, sep=';')
+bac_rare$bac <- c("bac")
+bac_rare <- bac_rare %>% unite('tax.Genus', c(bac, tax.Genus), remove=T, sep=';')
+bac_rare <- bac_rare %>% unite('GID', c(tax.Genus, ASVid), remove=F, sep=';')
+bac_surf <- ungroup(bac_rare) %>% filter(depth_m == 2)
 ```
 ```{r}
 #Colours used for the NRS station
@@ -31,7 +47,7 @@ brewer.pal(9, "Set1")
 mycols73 <- c("#99EEFF","#33BBFF","#33DDFF","#086391","#5299E0","#007FFF","#004C99","#0dc9e5","#054261","#9EFADD","#73F1CA","#52E4BB","#3BCFAB","#2BB398","#A0E0F7","#7ECEED","#64B8DE","#4F9CC7","#3E7EA9","#ADBAFA","#899AF1","#6C7EE4","#5667CF","#4352B3","#D8BBFB","#C094F4","#AC74E8","#985CD5","#8548BB","#58156c","#F4C5FD","#EDA7F9","#E380EF","#D863DE","#C44CBF","#b43dd8","#FDC9E1","#FAADCF","#F189B4","#E46C98","#C74F6F","#FCBBBC","#ED7E80","#D75D5F","#E83535","#A93E3F","#8B4513","#A0522D","#A96928","#BD7E32","#CF923E","#DEA54D","#E9B65F","#724407","#F18109","#F29B0F","#F3B516","#F4CF1D","#FBFFB2","#A92A28","#BD3532","#D74945","#E45B55","#ED6F6A","#B8F792","#92ED6A","#6ADE4D","#3EC737","#28A93A","#99C745","#75A12D","#26912A","#1A6E20")
 ```
 
-## Figure 1A (NRS station MAP) 
+## Figure 1 (NRS station MAP) 
 ```{r}
 #Load specific library
 library(maps)
@@ -43,46 +59,63 @@ library(rnaturalearth)
 library(rgeos)
 ```
 ```{r}
-# To create a dataframe with the coordinate of the NRS station 
-labs <- data.frame(
-  lat = c(-12.4634, -27.5323, -32.0064, -19.4591, -34.0692, -35.7752, -42.6451), 
-  long = c(130.8456, 153.4626, 115.5073, 147.4805, 151.125, 137.2142, 148.065), 
-  names = c("Darwin", "North Stradbroke Island", "Rottnest Island", "Yongala", "Port Hacking", "Kangaroo Island", "Maria Island"), 
-  stringsAsFactors = FALSE
-)
-```
-```{r}
-sst01 <- nc_open("~/PHD/BPA_Metadata_Analysis/SST_OceanCoor_DataMAP/AQUA_MODIS.20150101_20151231.L3m.YR.NSST.sst.4km.nc");
-sst01.d<-ncvar_get(sst01, 'sst') 
-sst01.d[sst01.d>42.00072]<-NA  
+sst01<-nc_open("~/IMOS_aggregation_20210618T062349Z.nc")
+sst01.d<-ncvar_get(sst01, 'sea_surface_temperature');  ### check the variable name is correct, can be 'sst4', or other names
 sstlon <- ncvar_get(sst01, 'lon')
 sstlat <- ncvar_get(sst01, 'lat')
-```
-```{r}
 sstL<-vector('list', length(sst01.d))
-sstL <-as.vector(sst01.d-273.15)
+
+  sstL <-as.vector(sst01.d-273.15)
 ## Arrange the data into long format for ggplot
 longitude<- rep(sstlon, length(sstlat))
+## This loop might take a while and would be improved by converting to an apply function
 latitude  <- NA
 for (i in seq_along(sstlat)){
   latitude <-c(latitude , rep(sstlat[i],length(sstlon)))
 }
 sst=as.vector(sstL)
 SSTlong<-as.data.frame(cbind(lat=latitude[1:length(sst)], lon=longitude[1:length(sst)], sst=as.vector(sstL)))
-```
-```{r}
+
+world <- ne_countries(scale = "Medium", returnclass = "sf")
+
+#To create a dataframe with the coordinate of the NRS station 
+NRSlabs <- data.frame(
+  lat = c(-12.4634, -27.5323, -32.0064, -19.4591, -34.0692, -35.7752, -42.6451), 
+  long = c(130.8456, 153.4626, 115.5073, 147.4805, 151.125, 137.2142, 148.065), 
+  names = c("DAR", "NSI", "ROT", "YON", "PHB", "KAI", "MAI"), 
+  stringsAsFactors = FALSE
+)
+
+NRSlabs$names <- factor(NRSlabs$names, levels =c("DAR", "YON", "NSI", "ROT", "PHB", "KAI", "MAI"))
+
 xrange <- c(105,162)
 yrange <- c (-50, -6)
-imagep(sstlon, sstlat, sst01.d, col=oceColorsTemperature(255), filledContour=T, missingColor=0, zlab='SST', xlim = xrange, ylim = yrange, asp=1); #zlim=c(10,28)
-map('worldHires', xlim = xrange, ylim = yrange, fill=T, col="#e2dfdf", add=T, lwd=0.5, border=NA)
-grid() 
-title(xlab = 'Longitude',
-        ylab = 'Latitude')
-points(labs$lon, labs$lat, pch=16, col="black", size = 2)
-text(labs$lon, labs$lat,labels=labs$names, cex=1.5)
+
+mycol7 <- c("#E41A1C", "#377EB8", "#4DAF4A", "#984EA3", "#FF7F00", "#FFFF33", "#A65628")
+
+ggplot() + 
+  geom_tile(data=SSTlong, aes(x=lon, y=lat, fill=sst)) + 
+        scale_fill_gradientn(colors=oceColorsTemperature(300), na.value = NA, name='SST (°C)', limits=c(4,30)) +   
+  geom_sf(data = world, lwd = 0) + coord_sf(xlim = xrange, ylim=yrange, expand=F) +
+  #geom_segment(data=as.data.frame(dat2), aes(x=x, xend=x2, y=y, yend=y2), lwd=0.1, arrow = arrow(type = 'open',length = unit(0.05, "cm"))) + 
+  geom_point(data=NRSlabs, aes(x=long, y=lat, color = names), size = 8) +
+  scale_color_manual(values=mycol7, name='NRS station') +
+  #geom_label(data=NRSlabs, aes(x=long, y=lat, label=names), size=8) + #%>%  filter(long> 143, lat < -21) color='white', fill='black', label.padding=unit(0.1,'cm'),
+  labs(title='', x= 'Longitude (°E)', y='Latitude (°N)') +
+  theme_bw() +
+  theme(plot.title = element_text(size = 14, family = "Arial", face = "bold"),
+        text=element_text(family = "Arial"),
+        axis.title = element_text(size = 20, family = "Arial",face="bold"),
+        axis.text.x = element_text(colour="black", size = 18, face = "bold", vjust = 0.6),
+        axis.text.y = element_text(colour="black", size = 18),
+        axis.line = element_line(size=0.5, colour = "black"),
+        legend.title = element_text(colour= "black", size=20, face= "bold" ),
+        legend.text = element_text(size = 14)) 
 ```
 
-## Figure 2 (barplot - Genera RA/sites
+
+
+## Figure 2 (barplot - Genera RA/sites)
 ```{r}
 #To calculate average abundance across the entire dataset
 subset <-  diatoms_surf %>% select("FG", "sample", "abund_rare", "uniqcode", "date_utc")
