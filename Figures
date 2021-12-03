@@ -658,6 +658,137 @@ ggplot(selection, aes(x=month.abb, y=RA.percent, fill=factor(tax.Genus, levels =
   labs(y = "Proportion (%)", x = "")
 ```
 
+## Figure S2 (DIATOMS - Alpha Diversity index)
+```{r}
+library(phyloseq)
+```
+1) Make a smaller subset file 
+```{r}
+#Make a subset with only the column needed 
+diatoms.na <- ungroup(diatoms_surf) %>% select("date_utc", "day_length", "temperature_deg_c", "silicate_umol_per_l", "depth_m", "sample", "phosphate_umol_per_l", "nitrate_nitrite_umol_per_l", "ammonium_umol_per_l", "uniqcode", "sample", "GID", "abund_rare", 'ASVid','tax.Kingdom', 'tax.Supergroup','tax.Division','tax.Class','tax.Family', 'tax.Genus','tax.Species', 'GID', 'ASV', "season", "climatic_zone", "Prop_diatoms_phyto")
+# Square-root transform all the independent variables 
+diatoms.na$day_length <- sqrt(diatoms.na$day_length)
+diatoms.na$temperature_deg_c <- sqrt(diatoms.na$temperature_deg_c)
+diatoms.na$silicate_umol_per_l <- sqrt(diatoms.na$silicate_umol_per_l)
+diatoms.na$phosphate_umol_per_l <- sqrt(diatoms.na$phosphate_umol_per_l)
+diatoms.na$nitrate_nitrite_umol_per_l <- sqrt(diatoms.na$nitrate_nitrite_umol_per_l)
+diatoms.na$ammonium_umol_per_l <- sqrt(diatoms.na$ammonium_umol_per_l)
+diatoms.na <- na.omit(diatoms.na)
+```
+2) Make the ASV matrix 
+```{r}
+com <- ungroup(diatoms.na) %>% select('sample', 'GID', 'abund_rare') %>% spread(key =sample, value=abund_rare, fill=0)  
+com.matrix <-  as.matrix(com[,-c(1)])
+row.names(com.matrix)<- paste0(com$GID)
+com.matrix.nz <- com.matrix[,colSums(com.matrix)!=0] 
+```
+3) Make a metadata dataframe 
+```{r}
+env.vars <- ungroup(diatoms.na) %>% select(c("date_utc", "day_length", "temperature_deg_c", "silicate_umol_per_l", "depth_m", "sample",  "phosphate_umol_per_l", "nitrate_nitrite_umol_per_l", "ammonium_umol_per_l", "uniqcode", "season", "climatic_zone"))
+env.vars <- distinct(env.vars)
+rownames(env.vars) <- env.vars$sample
+env.data = sample_data(data.frame(env.vars))
+```
+4) Make a taxonomy dataframe
+```{r}
+taxonomy <- ungroup(diatoms.na) %>% select(c('GID', 'ASVid','tax.Kingdom', 'tax.Supergroup','tax.Division','tax.Class','tax.Family', 'tax.Genus','tax.Species', 'ASV'))
+taxonomy<- distinct(taxonomy) #make your list distinct
+tax <-as.matrix(taxonomy)
+rownames(tax) <- paste0(taxonomy$GID) #call the rows name with ASVid but add 18asv before it
+tax2<-tax[1:nrow(tax), 2:8]
+```
+5) Create a phyloseq object
+```{r}
+OTU = otu_table(com.matrix.nz, taxa_are_rows = TRUE)
+TAX = tax_table(tax2)
+physeq = phyloseq(OTU, TAX)
+physeq2 = merge_phyloseq(physeq, env.data)
+```
+6) PLot Alpha diversity indices in a boxplot
+```{r}
+# alpha diversity is measured on count data in phyloseq
+plot_richness(physeq2, x = "uniqcode", measures= c("Observed", "Shannon", "Chao1", "InvSimpson")) +
+  geom_boxplot(aes(x = uniqcode, y = value, fill = uniqcode), colour = "black", size = 0) + 
+  theme_bw() +
+  theme(panel.grid.major = element_line(colour = "#d3d3d3"),
+              panel.grid.minor = element_blank(),
+              panel.background = element_blank(),
+              plot.title = element_text(size = 14, family = "Arial", face = "bold"),
+              text=element_text(family = "Arial"),
+              axis.title = element_text(size = 20, family = "Arial",face="bold"),
+              axis.text.x = element_text(colour="black", size = 18, face = "bold", angle = 65, vjust = 0.6),
+              axis.text.y = element_text(colour="black", size = 18),
+              axis.line = element_line(size=0.5, colour = "black"),
+              legend.title = element_text(colour= "black", size=12, face= "bold" ),
+              legend.text = element_text(face = "italic")) +
+  scale_fill_manual(values = c("#E41A1C", "#377EB8", "#4DAF4A", "#984EA3", "#FF7F00", "#FFFF33", "#A65628")) +
+  theme(legend.position = "") +
+  labs(x = "") 
+```
+## Figure S3 (Peak Abundance Diatom / bacteria)
+ NSI = "#4DAF4A", PHB = "#FF7F00", MAI = "#A65628"
+```{r}
+MAI = c("euk;Cerataulina;Eb1000702",
+"euk;Rhizosolenia;Eb1001509",
+"euk;Thalassiosira;Eb1000094",
+"euk;Proboscia;Eb1000604",
+"bac;NS2b marine group;Bc1000286",
+"bac;Oceanococcus;Bc1003424",
+"bac;NS5 marine group;Bc1000444",
+"bac;Oceanicoccus;Bc1000618")
+PHB = c("euk;Thalassiosira;Eb1002649",
+"euk;Guinardia;Eb1000659",
+"euk;Thalassiosira;Eb1000094",
+"euk;Proboscia;Eb1000604",
+"bac;Idiomarina;Bc1002707",
+"bac;Leucothrix;Bc1009203",
+"bac;NS5 marine group;Bc1000444",
+"bac;Oceanicoccus;Bc1000618")
+NSI = c("euk;Pseudo-nitzschia;Eb1000918",
+"euk;Chaetoceros;Eb1001731",
+"euk;Thalassiosira;Eb1000094",
+"bac;NS5 marine group;Bc1000444")
+```
+```{r}
+sub_diatom <- diatoms_surf %>% dplyr::select("ASVid", "GID", "tax.Genus", "date_utc", "sample", "uniqcode", "RA.percent", "season", "year")
+sub_diatom2 <- sub_diatom %>% filter(GID %in% network_GID)
+sub_diatom2$ID <- "diatom"
+sub_bac <- bac_surf %>% dplyr::select("ASVid", "GID", "tax.Genus", "sample", "utc_date_sampled_yyyymmdd", "prec", "uniqcode", "season", "year")
+sub_bac$year <- as.numeric(sub_bac$year)
+colnames(sub_bac)[colnames(sub_bac) == "prec"] <- "RA.percent"
+colnames(sub_bac)[colnames(sub_bac) == "utc_date_sampled_yyyymmdd"] <- "date_utc"
+sub_bac2 <- sub_bac %>% filter(GID %in% network_GID)
+sub_bac2$ID <- "bacteria"
+sub <- combine(sub_diatom2, sub_bac2)
+sub <- distinct(sub)
+```
+```{r}
+ggplot(diatoms_surf %>% dplyr::filter(GID %in% NSI & uniqcode == "NSI"), aes(x=season, y=RA.percent, fill = uniqcode)) + 
+  #geom_point(position='stack') +
+  #geom_line() + 
+  geom_bar(stat = "identity") +
+  facet_grid(GID ~ year, scales = "free_y") +
+  theme_bw() + 
+  theme(legend.position='') +
+  theme(axis.text.x = element_text(colour="black", angle = 65, vjust = 0.6)) +
+  scale_fill_manual(values = "#4DAF4A")
+
+ggplot(diatoms_surf %>% dplyr::filter(GID %in% PHB & uniqcode == "PHB"), aes(x=season, y=RA.percent, fill = uniqcode)) + 
+  geom_bar(stat = "identity") +
+  facet_grid(GID ~ year, scales = "free_y") +
+  theme_bw() + 
+  theme(legend.position='') +
+  theme(axis.text.x = element_text(colour="black", angle = 65, vjust = 0.6)) +
+  scale_fill_manual(values = "#FF7F00")
+
+ggplot(diatoms_surf %>% dplyr::filter(GID %in% MAI & uniqcode == "MAI"), aes(x=season, y=RA.percent, fill = uniqcode)) + 
+  geom_bar(stat = "identity") +
+  facet_grid(GID ~ year, scales = "free_y") +
+  theme_bw() + 
+  theme(legend.position='') +
+  theme(axis.text.x = element_text(colour="black", angle = 65, vjust = 0.6)) +
+  scale_fill_manual(values = "#A65628")
+```
 
 
 
