@@ -34,6 +34,14 @@ bac_rare$bac <- c("bac")
 bac_rare <- bac_rare %>% unite('tax.Genus', c(bac, tax.Genus), remove=T, sep=';')
 bac_rare <- bac_rare %>% unite('GID', c(tax.Genus, ASVid), remove=F, sep=';')
 bac_surf <- ungroup(bac_rare) %>% filter(depth_m == 2)
+# Calculate sample total
+bac_tot <- bac_surf %>% group_by(sample) %>% dplyr::summarise(total_bac = sum(abund_rare))
+bac_tot <- bac_surf %>% left_join(bac_tot)
+# Calculate relative abundance
+bac_RA <- bac_tot %>% group_by(sample, ASV) %>% mutate(RA.percent= (abund_rare / total_bac)*100)
+bac_RA <- bac_tot %>% group_by(sample, tax.Family) %>% mutate(RA.fam= (abund_rare / total_bac)*100)
+bac_RA2 <- bac_RA %>% group_by(sample, ASV) %>% mutate(proportion= (abund_rare / total_bac))
+bac_surf2 <- bac_RA2 
 ```
 ```{r}
 #Colours used for the NRS station
@@ -305,7 +313,7 @@ ggsal <- ggplot(env_data, aes(x= uniqcode, y= salinity_psu...12, colour = salini
        y = "Salinity (psu)")  
 ggsal  # no specific outliers
 
-multiplot(ggtemp, ggphosp, ggnitrate, ggamo, ggsili, ggsal, cols=2)
+multiplot(ggtemp, ggphosp, ggnitrate, ggamo, ggsili, ggsal, ggtime, cols=2)
 ```
 
 ## Figure 3 (barplot - Genera relative abundance per site)
@@ -438,9 +446,8 @@ colnames(ASV_bestfitb) <- c("GID")
 ```{r}
 ASV.order3 <- c("euk;Skeletonema;Eb1000789","euk;Skeletonema;Eb1001219","euk;Thalassiosira;Eb1000926","euk;Chaetoceros;Eb1002525","euk;Chaetoceros;Eb1001502","euk;Skeletonema;Eb1000779","euk;Rhizosolenia;Eb1001509","euk;Brockmanniella;Eb1000427","euk;Thalassiosira;Eb1000094","euk;Cerataulina;Eb1000702","euk;Minidiscus;Eb1000338","euk;Proboscia;Eb1000604","euk;Leptocylindrus;Eb1000086","euk;Skeletonema;Eb1000106","euk;Skeletonema;Eb1000520","euk;Skeletonema;Eb1000172","euk;Thalassiosira;Eb1000892","euk;Leptocylindrus;Eb1000190","euk;Chaetoceros;Eb1000724","euk;Guinardia;Eb1000907","euk;Rhizosolenia;Eb1000541","euk;Cylindrotheca;Eb1001240","euk;Cylindrotheca;Eb1000744","euk;Chaetoceros;Eb1001960","euk;Guinardia;Eb1001573","euk;Chaetoceros;Eb1000827","euk;Chaetoceros;Eb1001731","euk;Chaetoceros;Eb1002800","euk;Bacteriastrum;Eb1000935","euk;Eucampia;Eb1000686","euk;Chaetoceros;Eb1001275","euk;Chaetoceros;Eb1002318","euk;Chaetoceros;Eb1001313","euk;Skeletonema;Eb1000943","euk;Bacteriastrum;Eb1001530","euk;Cerataulina;Eb1000684","euk;Proboscia;Eb1001601","euk;Bacteriastrum;Eb1001648","euk;Bacteriastrum;Eb1002598","euk;Bacteriastrum;Eb1001854","euk;Nitzschia;Eb1001436","euk;Bacteriastrum;Eb1002531","euk;Minidiscus;Eb1000092","euk;Chaetoceros;Eb1003520","euk;Minutocellus;Eb1000151","euk;Palmerina;Eb1007296","euk;Cylindrotheca;Eb1000511","euk;Cylindrotheca;Eb1002909","euk;Skeletonema;Eb1001523","euk;Skeletonema;Eb1006123","euk;Navicula;Eb1002331")
 ```
-
 ```{r}
-#PLOT the CCA
+#Extract the data to plot the CCA
 #Check the attributes
 scrs <- scores(cca.1,display=c("sp","wa","lc","bp","cn"))
 attributes(scrs)
@@ -624,6 +631,288 @@ ggplot(subset_ra_month %>% filter(uniqcode %in% c("PHB", "MAI", "NSI")), aes(x= 
          labs(y = "Proportion (%)", x = "")
 ```
 
+## Figure 6 (Seasonality CCA)
+```{r}
+diatoms_fam$season <- factor(diatoms_fam$season, levels=c("summer", "autumn", "winter", "spring"))
+NSI <- diatoms_fam %>% filter(uniqcode == "NSI")
+PHB <- diatoms_fam %>% filter(uniqcode == "PHB")
+MAI <- diatoms_fam %>% filter(uniqcode == "MAI")
+```
+North Stradbroke Island
+```{r}
+NSI_sub <- ungroup(NSI) %>% filter(!sample %in% c( "139769")) %>% select("sample", "date_utc", "GID", "day_length", "temperature_deg_c", "silicate_umol_per_l","salinity_psu...12", "phosphate_umol_per_l", "nitrate_nitrite_umol_per_l", "ammonium_umol_per_l", "abund_rare", "Flavobacteriaceae",  "Rhodobacteraceae", "Alteromonadaceae_Marinobacter", "year_season", "year", "season") %>%  spread(key = GID, value = abund_rare, fill=0)  #"35700", "139763",
+
+NSI_sub$day_length <- sqrt(NSI_sub$day_length)
+NSI_sub$temperature_deg_c <- sqrt(NSI_sub$temperature_deg_c)
+NSI_sub$silicate_umol_per_l <- sqrt(NSI_sub$silicate_umol_per_l)
+NSI_sub$salinity_psu...12 <- sqrt(NSI_sub$salinity_psu...12)
+NSI_sub$phosphate_umol_per_l <- sqrt(NSI_sub$phosphate_umol_per_l)
+NSI_sub$nitrate_nitrite_umol_per_l <- sqrt(NSI_sub$nitrate_nitrite_umol_per_l)
+NSI_sub$ammonium_umol_per_l <- sqrt(NSI_sub$ammonium_umol_per_l)
+NSI_sub$Flavobacteriaceae <- sqrt(NSI_sub$Flavobacteriaceae)
+NSI_sub$Rhodobacteraceae <- sqrt(NSI_sub$Rhodobacteraceae)
+NSI_sub$Alteromonadaceae_Marinobacter <- sqrt(NSI_sub$Alteromonadaceae_Marinobacter)
+NSI_sub <- na.omit(NSI_sub)
+
+com.matrix.nsi <-  as.matrix(NSI_sub[,-c(1:15)]) 
+row.names(com.matrix.nsi)<- NSI_sub$sample
+com.matrix.nsi.nz <- com.matrix.nsi[,colSums(com.matrix.nsi)!=0]
+
+env_data_NSI <- ungroup(NSI_sub) %>% select("sample", "day_length", "temperature_deg_c", "silicate_umol_per_l","salinity_psu...12", "phosphate_umol_per_l", "nitrate_nitrite_umol_per_l", "date_utc", "ammonium_umol_per_l", "Flavobacteriaceae",  "Rhodobacteraceae", "Alteromonadaceae_Marinobacter", "year_season", "year", "season")
+env_data_NSI <- distinct(env_data_NSI)
+names(env_data_NSI)[names(env_data_NSI) == "temperature_deg_c"] <- "Temperature"
+names(env_data_NSI)[names(env_data_NSI) == "day_length"] <- "Daylength"
+names(env_data_NSI)[names(env_data_NSI) == "silicate_umol_per_l"] <- "Silicate"
+names(env_data_NSI)[names(env_data_NSI) == "salinity_psu...12"] <- "Salinity"
+names(env_data_NSI)[names(env_data_NSI) == "phosphate_umol_per_l"] <- "Phosphate"
+names(env_data_NSI)[names(env_data_NSI) == "nitrate_nitrite_umol_per_l"] <- "Nitrate"
+names(env_data_NSI)[names(env_data_NSI) == "ammonium_umol_per_l"] <- "Ammonium"
+names(env_data_NSI)[names(env_data_NSI) == "date_utc"] <- "Date"
+```
+```{r}
+cca_NSI <- cca(com.matrix.nsi.nz ~ Temperature + Daylength + Silicate + Phosphate +  Nitrate + Ammonium + Salinity + Rhodobacteraceae + Alteromonadaceae_Marinobacter + Flavobacteriaceae, data=env_data_NSI) 
+```
+```{r}
+##Select the top 10% most frequent species with 60% best fitting 
+cca_NSI_env <- envfit(cca_NSI, env_data_NSI[,c("Temperature","Daylength","Silicate","Phosphate","Nitrate","Ammonium","Salinity","Rhodobacteraceae","Alteromonadaceae_Marinobacter","Flavobacteriaceae")], choices=c(1,3))
+ASV_bestfit_NSI <- ordiselect(com.matrix.nsi.nz, cca_NSI, ablim = 0.08, fitlim = 0.6, method = "vars", env = cca_NSI_env)
+ASV_bestfit_NSI_b <- as.data.frame(ASV_bestfit_NSI)
+ASV_bestfit_NSI_b <- as.data.frame(str_replace_all(ASV_bestfit_NSI_b$ASV_bestfit_NSI, "[.]", ";"))
+colnames(ASV_bestfit_NSI_b) <- c("GID")
+```
+```{r}
+#Extract the data to plot the CCA
+#Check the attributes
+scrs <- scores(cca_NSI,display=c("sp","wa","lc","bp","cn"))
+attributes(scrs)
+#Extract data and set up vectors for arrows - SITES
+df_sites <- data.frame(scrs$sites) #,t(as.data.frame(strsplit(rownames(scrs$sites),"_")))
+df_sites <- rownames_to_column(df_sites, "sample")
+env_data_NSI$sample <- as.character(env_data_NSI$sample)
+df_sites <- left_join(df_sites,env_data_NSI , by = "sample")
+#Extract data and set up vectors for arrows - SPECIES (ASVs)
+df_species <- data.frame(scrs$species)
+df_species_arrow <- rownames_to_column(df_species, "labels")
+#Extract data and set up vectors for arrows - ENV VAR
+df_biplot <- data.frame(scrs$biplot)
+df_biplot_arrow <- rownames_to_column(df_biplot, "labels")
+df_env_arrow <- df_biplot_arrow %>% filter(labels %in% c("Temperature", "Silicate", "Phosphate", "Daylength", "Nitrate", "Ammonium", "Salinity", "Flavobacteriaceae",  "Rhodobacteraceae", "Alteromonadaceae_Marinobacter", "year_season")) 
+#Format the arrows 
+arrowhead = arrow(length = unit(0.2, "cm"))
+#To filter and select the 10% most abundant and 60% best fitting 
+ASVssp_nsi <- df_species_arrow %>% filter(labels %in% ASV_bestfit_NSI_b$GID )
+#writexl::write_xlsx(ASVssp_nsi, "ASVs_selection_CCAseason_NSI_121221_8per.xlsx")
+sp_NSI <- read_excel("~/ASVs_selection_CCAseason_NSI_121221_8per.xlsx")
+mycolv.NSI<- sp_NSI$col
+names(mycolv.NSI) <- sp_NSI$Label
+
+ASV.order.NSI <- c("euk;Bacteriastrum;Eb1000935","euk;Bacteriastrum;Eb1001648","euk;Bacteriastrum;Eb1001530","euk;Bacteriastrum;Eb1002598","euk;Chaetoceros;Eb1000043","euk;Chaetoceros;Eb1001275","euk;Leptocylindrus;Eb1000190","euk;Rhizosolenia;Eb1000407","euk;Skeletonema;Eb1000943","euk;Eucampia;Eb1000686","euk;Leptocylindrus;Eb1000086","euk;Cerataulina;Eb1000684","euk;Proboscia;Eb1001601","euk;Rhizosolenia;Eb1000541","euk;Guinardia;Eb1000907","euk;Chaetoceros;Eb1000827","euk;Chaetoceros;Eb1001731","euk;Thalassiosira;Eb1000094","euk;Minidiscus;Eb1000338")
+
+#Plot the CCA using ggplot
+ggplot(df_sites, aes(x = CCA1, y = CCA2)) + 
+  geom_point(data = df_sites, aes(colour = as.factor(season)), size = 6) + #pch =16
+  geom_segment(data = df_env_arrow, aes(x = 0, y = 0, xend = CCA1, yend = CCA2), 
+                arrow = arrowhead, size = 1, colour = "black") + 
+  geom_text(data = df_env_arrow, aes(x=1.2 *CCA1,y=1.2 *CCA2,label=labels), size=5) + 
+  geom_point(data = sp_NSI, aes(x=CCA1, y =CCA2, fill = factor(Label, levels = c(ASV.order.NSI))), size = 4, pch = 22) + # 
+  #geom_text(data = ASVssp_NSI, aes(x=1.2 *CCA1,y=1.2 *CCA2,label=labels), size=5) +
+  geom_abline(intercept = 0,slope = 0,linetype="dashed", size=0.8) + 
+  geom_vline(aes(xintercept=0), linetype="dashed", size=0.8) +
+  scale_colour_manual("Season", values = c("#FF0000", "#998033", "#0B5394","#51A52D"), limits = c("summer", "autumn", "winter", "spring")) +
+  scale_fill_manual("ASVid", values = mycolv.NSI) +
+  theme(legend.position = "right") +
+  guides(fill=guide_legend(ncol=1)) + 
+  theme(legend.justification = c(0,0), axis.text = element_text(family = "Arial",  colour = "black", size = 20),
+        axis.title = element_text(family = "Arial", size = 25),
+        text = element_text(family = "Arial", size = 20)) +
+  stat_ellipse(aes(group = season, colour = season),level=0.8) +
+  theme_bw(base_size = 15) +
+  labs(title = "NSI")
+```
+Port Hacking
+```{r}
+PHB_sub <- ungroup(PHB) %>% select("sample", "date_utc", "GID", "day_length", "temperature_deg_c", "silicate_umol_per_l","salinity_psu...12", "phosphate_umol_per_l", "nitrate_nitrite_umol_per_l", "ammonium_umol_per_l", "abund_rare", "Flavobacteriaceae",  "Rhodobacteraceae", "Alteromonadaceae_Marinobacter", "year_season", "year", "season") %>%  spread(key = GID, value = abund_rare, fill=0) 
+
+PHB_sub$day_length <- sqrt(PHB_sub$day_length)
+PHB_sub$temperature_deg_c <- sqrt(PHB_sub$temperature_deg_c)
+PHB_sub$silicate_umol_per_l <- sqrt(PHB_sub$silicate_umol_per_l)
+PHB_sub$salinity_psu...12 <- sqrt(PHB_sub$salinity_psu...12)
+PHB_sub$phosphate_umol_per_l <- sqrt(PHB_sub$phosphate_umol_per_l)
+PHB_sub$nitrate_nitrite_umol_per_l <- sqrt(PHB_sub$nitrate_nitrite_umol_per_l)
+PHB_sub$ammonium_umol_per_l <- sqrt(PHB_sub$ammonium_umol_per_l)
+PHB_sub$Flavobacteriaceae <- sqrt(PHB_sub$Flavobacteriaceae)
+PHB_sub$Rhodobacteraceae <- sqrt(PHB_sub$Rhodobacteraceae)
+PHB_sub$Alteromonadaceae_Marinobacter <- sqrt(PHB_sub$Alteromonadaceae_Marinobacter)
+PHB_sub <- na.omit(PHB_sub)
+
+com.matrix.PHB <-  as.matrix(PHB_sub[,-c(1:15)]) 
+row.names(com.matrix.PHB)<- PHB_sub$sample
+com.matrix.PHB.nz <- com.matrix.PHB[,colSums(com.matrix.PHB)!=0]
+
+env_data_PHB <- ungroup(PHB_sub) %>% select("sample", "day_length", "temperature_deg_c", "silicate_umol_per_l","salinity_psu...12", "phosphate_umol_per_l", "nitrate_nitrite_umol_per_l", "date_utc", "ammonium_umol_per_l", "Flavobacteriaceae",  "Rhodobacteraceae", "Alteromonadaceae_Marinobacter", "year_season", "year", "season")
+env_data_PHB <- distinct(env_data_PHB)
+names(env_data_PHB)[names(env_data_PHB) == "temperature_deg_c"] <- "Temperature"
+names(env_data_PHB)[names(env_data_PHB) == "day_length"] <- "Daylength"
+names(env_data_PHB)[names(env_data_PHB) == "silicate_umol_per_l"] <- "Silicate"
+names(env_data_PHB)[names(env_data_PHB) == "salinity_psu...12"] <- "Salinity"
+names(env_data_PHB)[names(env_data_PHB) == "phosphate_umol_per_l"] <- "Phosphate"
+names(env_data_PHB)[names(env_data_PHB) == "nitrate_nitrite_umol_per_l"] <- "Nitrate"
+names(env_data_PHB)[names(env_data_PHB) == "ammonium_umol_per_l"] <- "Ammonium"
+names(env_data_PHB)[names(env_data_PHB) == "date_utc"] <- "Date"
+```
+```{r}
+cca_PHB <- cca(com.matrix.PHB.nz ~ Temperature + Daylength + Silicate + Phosphate +  Nitrate + Ammonium + Salinity + Rhodobacteraceae + Alteromonadaceae_Marinobacter + Flavobacteriaceae, data=env_data_PHB) 
+```
+```{r}
+##Select the top 10% most frequent species with 60% best fitting 
+cca_PHB_env <- envfit(cca_PHB, env_data_PHB[,c("Temperature","Daylength","Silicate","Phosphate","Nitrate","Ammonium","Salinity","Rhodobacteraceae","Alteromonadaceae_Marinobacter","Flavobacteriaceae")], choices=c(1,3))
+ASV_bestfit_PHB <- ordiselect(com.matrix.PHB.nz, cca_PHB, ablim = 0.08, fitlim = 0.6, method = "vars", env = cca_PHB_env)
+ASV_bestfit_PHB_b <- as.data.frame(ASV_bestfit_PHB)
+ASV_bestfit_PHB_b <- as.data.frame(str_replace_all(ASV_bestfit_PHB_b$ASV_bestfit_PHB, "[.]", ";"))
+colnames(ASV_bestfit_PHB_b) <- c("GID")
+```
+```{r}
+#PLOT the CCA
+#Check the attributes
+scrs <- scores(cca_PHB,display=c("sp","wa","lc","bp","cn"))
+attributes(scrs)
+#Extract data and set up vectors for arrows - SITES
+df_sites <- data.frame(scrs$sites) #,t(as.data.frame(strsplit(rownames(scrs$sites),"_")))
+df_sites <- rownames_to_column(df_sites, "sample")
+env_data_PHB$sample <- as.character(env_data_PHB$sample)
+df_sites <- left_join(df_sites,env_data_PHB , by = "sample")
+#Extract data and set up vectors for arrows - SPECIES (ASVs)
+df_species <- data.frame(scrs$species)
+df_species_arrow <- rownames_to_column(df_species, "labels")
+#Extract data and set up vectors for arrows - ENV VAR
+df_biplot <- data.frame(scrs$biplot)
+df_biplot_arrow <- rownames_to_column(df_biplot, "labels")
+df_env_arrow <- df_biplot_arrow %>% filter(labels %in% c("Temperature", "Daylength", "Silicate", "Phosphate", "Nitrate", "Ammonium", "Salinity", "Flavobacteriaceae",  "Rhodobacteraceae", "Alteromonadaceae_Marinobacter", "year_season")) 
+#Format the arrows 
+arrowhead = arrow(length = unit(0.2, "cm"))
+#To filter and select the 10% most abundant and 60% best fitting 
+ASVssp_phb <- df_species_arrow %>% filter(labels %in% ASV_bestfit_PHB_b$GID )
+#writexl::write_xlsx(ASVssp_phb, "ASVs_selection_CCAseason_PHB_121221_8per.xlsx")
+sp_PHB <- read_excel("~/ASVs_selection_CCAseason_PHB_121221_8per.xlsx")
+mycolv.PHB<- sp_PHB$col
+names(mycolv.PHB) <- sp_PHB$Label
+
+ASV.order.PHB <- c("euk;Thalassiosira;Eb1006520","euk;Thalassiosira;Eb1000094","euk;Detonula;Eb1002864","euk;Chaetoceros;Eb1000724","euk;Minidiscus;Eb1000192","euk;Minidiscus;Eb1000092","euk;Skeletonema;Eb1000106","euk;Skeletonema;Eb1001184","euk;Skeletonema;Eb1001438","euk;Cyclotella;Eb1000297","euk;Guinardia;Eb1001443","euk;Thalassiosira;Eb1000892","euk;Proboscia;Eb1000604","euk;Cylindrotheca;Eb1000744","euk;Cerataulina;Eb1000702","euk;Skeletonema;Eb1000520","euk;Cerataulina;Eb1000208","euk;Leptocylindrus;Eb1000190")
+
+
+#Plot the CCA using ggplot
+ggplot(df_sites, aes(x = CCA1, y = CCA2)) + 
+  geom_point(data = df_sites, aes(colour = as.factor(season)), size = 6) + #pch =16
+  geom_segment(data = df_env_arrow, aes(x = 0, y = 0, xend = CCA1, yend = CCA2), 
+                arrow = arrowhead, size = 1, colour = "black") + 
+  geom_text(data = df_env_arrow, aes(x=1.2 *CCA1,y=1.2 *CCA2,label=labels), size=5) + 
+  geom_point(data = sp_PHB, aes(x=CCA1, y =CCA2, fill = factor(Label, levels = c(ASV.order.PHB))), size = 4, pch = 22) + # 
+  #geom_text(data = ASVssp_phb, aes(x=1.2 *CCA1,y=1.2 *CCA2,label=labels), size=5) +
+  geom_abline(intercept = 0,slope = 0,linetype="dashed", size=0.8) + 
+  geom_vline(aes(xintercept=0), linetype="dashed", size=0.8) +
+  scale_colour_manual("Season", values = c("#FF0000", "#998033", "#0B5394","#51A52D"), limits = c("summer", "autumn", "winter", "spring")) +
+  scale_fill_manual("ASVid", values = mycolv.PHB) +
+  theme(legend.position = "right") +
+  guides(fill=guide_legend(ncol=1)) + 
+  theme(legend.justification = c(0,0), axis.text = element_text(family = "Arial",  colour = "black", size = 20),
+        axis.title = element_text(family = "Arial", size = 25),
+        text = element_text(family = "Arial", size = 20)) +
+  stat_ellipse(aes(group = season, colour = season),level=0.8) +
+  theme_bw(base_size = 15) +
+  labs(title = "PHB")
+```
+Maria Island
+```{r}
+MAI_sub <- ungroup(MAI) %>% select("sample", "date_utc", "GID", "day_length", "temperature_deg_c", "silicate_umol_per_l","salinity_psu...12", "phosphate_umol_per_l", "nitrate_nitrite_umol_per_l", "ammonium_umol_per_l", "abund_rare", "Flavobacteriaceae",  "Rhodobacteraceae", "Alteromonadaceae_Marinobacter", "year_season", "year", "season") %>%  spread(key = GID, value = abund_rare, fill=0) 
+
+MAI_sub$day_length <- sqrt(MAI_sub$day_length)
+MAI_sub$temperature_deg_c <- sqrt(MAI_sub$temperature_deg_c)
+MAI_sub$silicate_umol_per_l <- sqrt(MAI_sub$silicate_umol_per_l)
+MAI_sub$salinity_psu...12 <- sqrt(MAI_sub$salinity_psu...12)
+MAI_sub$phosphate_umol_per_l <- sqrt(MAI_sub$phosphate_umol_per_l)
+MAI_sub$nitrate_nitrite_umol_per_l <- sqrt(MAI_sub$nitrate_nitrite_umol_per_l)
+MAI_sub$ammonium_umol_per_l <- sqrt(MAI_sub$ammonium_umol_per_l)
+MAI_sub$Flavobacteriaceae <- sqrt(MAI_sub$Flavobacteriaceae)
+MAI_sub$Rhodobacteraceae <- sqrt(MAI_sub$Rhodobacteraceae)
+MAI_sub$Alteromonadaceae_Marinobacter <- sqrt(MAI_sub$Alteromonadaceae_Marinobacter)
+MAI_sub <- na.omit(MAI_sub)
+
+com.matrix.MAI <-  as.matrix(MAI_sub[,-c(1:15)]) 
+row.names(com.matrix.MAI)<- MAI_sub$sample
+com.matrix.MAI.nz <- com.matrix.MAI[,colSums(com.matrix.MAI)!=0]
+
+env_data_MAI <- ungroup(MAI_sub) %>% select("sample", "day_length", "temperature_deg_c", "silicate_umol_per_l","salinity_psu...12", "phosphate_umol_per_l", "nitrate_nitrite_umol_per_l", "date_utc", "ammonium_umol_per_l", "Flavobacteriaceae",  "Rhodobacteraceae", "Alteromonadaceae_Marinobacter", "year_season", "year", "season")
+env_data_MAI <- distinct(env_data_MAI)
+names(env_data_MAI)[names(env_data_MAI) == "temperature_deg_c"] <- "Temperature"
+names(env_data_MAI)[names(env_data_MAI) == "day_length"] <- "Daylength"
+names(env_data_MAI)[names(env_data_MAI) == "silicate_umol_per_l"] <- "Silicate"
+names(env_data_MAI)[names(env_data_MAI) == "salinity_psu...12"] <- "Salinity"
+names(env_data_MAI)[names(env_data_MAI) == "phosphate_umol_per_l"] <- "Phosphate"
+names(env_data_MAI)[names(env_data_MAI) == "nitrate_nitrite_umol_per_l"] <- "Nitrate"
+names(env_data_MAI)[names(env_data_MAI) == "ammonium_umol_per_l"] <- "Ammonium"
+names(env_data_MAI)[names(env_data_MAI) == "date_utc"] <- "Date"
+```
+```{r}
+cca_MAI <- cca(com.matrix.MAI.nz ~ Temperature + Daylength + Silicate + Phosphate +  Nitrate + Ammonium + Salinity + Rhodobacteraceae + Alteromonadaceae_Marinobacter + Flavobacteriaceae, data=env_data_MAI) 
+```
+```{r}
+##Select the top 10% most frequent species with 60% best fitting 
+cca_MAI_env <- envfit(cca_MAI, env_data_MAI[,c("Temperature","Daylength","Silicate","Phosphate","Nitrate","Ammonium","Salinity","Rhodobacteraceae","Alteromonadaceae_Marinobacter","Flavobacteriaceae")], choices=c(1,3))
+ASV_bestfit_MAI <- ordiselect(com.matrix.MAI.nz, cca_MAI, ablim = 0.08, fitlim = 0.6, method = "vars", env = cca_MAI_env)
+ASV_bestfit_MAI_b <- as.data.frame(ASV_bestfit_MAI)
+ASV_bestfit_MAI_b <- as.data.frame(str_replace_all(ASV_bestfit_MAI_b$ASV_bestfit_MAI, "[.]", ";"))
+colnames(ASV_bestfit_MAI_b) <- c("GID")
+```
+```{r}
+#PLOT the CCA
+#Check the attributes
+scrs <- scores(cca_MAI,display=c("sp","wa","lc","bp","cn"))
+attributes(scrs)
+#Extract data and set up vectors for arrows - SITES
+df_sites <- data.frame(scrs$sites) #,t(as.data.frame(strsplit(rownames(scrs$sites),"_")))
+df_sites <- rownames_to_column(df_sites, "sample")
+env_data_MAI$sample <- as.character(env_data_MAI$sample)
+df_sites <- left_join(df_sites,env_data_MAI, by = "sample")
+#Extract data and set up vectors for arrows - SPECIES (ASVs)
+df_species <- data.frame(scrs$species)
+df_species_arrow <- rownames_to_column(df_species, "labels")
+#Extract data and set up vectors for arrows - ENV VAR
+df_biplot <- data.frame(scrs$biplot)
+df_biplot_arrow <- rownames_to_column(df_biplot, "labels")
+df_env_arrow <- df_biplot_arrow %>% filter(labels %in% c("Temperature","Daylength", "Silicate", "Phosphate", "Nitrate", "Ammonium", "Salinity", "Flavobacteriaceae",  "Rhodobacteraceae", "Alteromonadaceae_Marinobacter", "year_season")) 
+#Format the arrows 
+arrowhead = arrow(length = unit(0.2, "cm"))
+#To filter and select the 10% most abundant and 60% best fitting 
+ASVssp_mai <- df_species_arrow %>% filter(labels %in% ASV_bestfit_MAI_b$GID )
+#writexl::write_xlsx(ASVssp_mai, "ASVs_selection_CCAseason_MAI_121221_8per.xlsx")
+sp_mai <- read_excel("~/ASVs_selection_CCAseason_MAI_121221_8per.xlsx")
+mycolv.mai<- sp_mai$col
+names(mycolv.mai) <- sp_mai$Label
+
+ASV.order.mai <- c("euk;Rhizosolenia;Eb1000407","euk;Chaetoceros;Eb1000043","euk;Leptocylindrus;Eb1000190","euk;Thalassiosira;Eb1001204","euk;Minidiscus;Eb1000338","euk;Guinardia;Eb1000659","euk;Rhizosolenia;Eb1001509","euk;Thalassiosira;Eb1000094","euk;Minidiscus;Eb1000192","euk;Skeletonema;Eb1000789","euk;Skeletonema;Eb1001219","euk;Skeletonema;Eb1000779","euk;Thalassiosira;Eb1000926","euk;Chaetoceros;Eb1001502")
+
+#Plot the CCA using ggplot
+ggplot(df_sites, aes(x = CCA1, y = CCA2)) + 
+  geom_point(data = df_sites, aes(colour = as.factor(season)), size = 6) + #pch =16
+  geom_segment(data = df_env_arrow, aes(x = 0, y = 0, xend = CCA1, yend = CCA2), 
+                arrow = arrowhead, size = 1, colour = "black") + 
+  geom_text(data = df_env_arrow, aes(x=1.2 *CCA1,y=1.2 *CCA2,label=labels), size=5) + 
+  geom_point(data = sp_mai, aes(x=CCA1, y =CCA2, fill = factor(Label, levels = c(ASV.order.mai))), size = 4, pch = 22) +
+  #geom_text(data = ASVssp_mai, aes(x=1.2 *CCA1,y=1.2 *CCA2,label=labels), size=5) +
+  geom_abline(intercept = 0,slope = 0,linetype="dashed", size=0.8) + 
+  geom_vline(aes(xintercept=0), linetype="dashed", size=0.8) +
+  scale_colour_manual("Season", values = c("#FF0000", "#998033", "#0B5394","#51A52D"), limits = c("summer", "autumn", "winter", "spring")) +
+  scale_fill_manual("ASVid", values = mycolv.mai) +
+  theme(legend.position = "right") +
+  guides(fill=guide_legend(ncol=1)) + 
+  theme(legend.justification = c(0,0), axis.text = element_text(family = "Arial",  colour = "black", size = 20),
+        axis.title = element_text(family = "Arial", size = 25),
+        text = element_text(family = "Arial", size = 20)) +
+  stat_ellipse(aes(group = season, colour = season),level=0.8, linetype = 2) +
+  theme_bw(base_size = 15) +
+  labs(title = "MAI")
+```
+
 ## Figure S1 (barplot - Genera relative abundance by dates and sites)
 ```{r}
 #Same order and colours as Figure 3 and Figure 5B
@@ -731,36 +1020,14 @@ plot_richness(physeq2, x = "uniqcode", measures= c("Observed", "Shannon", "Chao1
 MAI = c("euk;Cerataulina;Eb1000702",
 "euk;Rhizosolenia;Eb1001509",
 "euk;Thalassiosira;Eb1000094",
-"euk;Proboscia;Eb1000604",
-"bac;NS2b marine group;Bc1000286",
-"bac;Oceanococcus;Bc1003424",
-"bac;NS5 marine group;Bc1000444",
-"bac;Oceanicoccus;Bc1000618")
+"euk;Proboscia;Eb1000604")
 PHB = c("euk;Thalassiosira;Eb1002649",
 "euk;Guinardia;Eb1000659",
 "euk;Thalassiosira;Eb1000094",
-"euk;Proboscia;Eb1000604",
-"bac;Idiomarina;Bc1002707",
-"bac;Leucothrix;Bc1009203",
-"bac;NS5 marine group;Bc1000444",
-"bac;Oceanicoccus;Bc1000618")
+"euk;Proboscia;Eb1000604")
 NSI = c("euk;Pseudo-nitzschia;Eb1000918",
 "euk;Chaetoceros;Eb1001731",
-"euk;Thalassiosira;Eb1000094",
-"bac;NS5 marine group;Bc1000444")
-```
-```{r}
-sub_diatom <- diatoms_surf %>% dplyr::select("ASVid", "GID", "tax.Genus", "date_utc", "sample", "uniqcode", "RA.percent", "season", "year")
-sub_diatom2 <- sub_diatom %>% filter(GID %in% network_GID)
-sub_diatom2$ID <- "diatom"
-sub_bac <- bac_surf %>% dplyr::select("ASVid", "GID", "tax.Genus", "sample", "utc_date_sampled_yyyymmdd", "prec", "uniqcode", "season", "year")
-sub_bac$year <- as.numeric(sub_bac$year)
-colnames(sub_bac)[colnames(sub_bac) == "prec"] <- "RA.percent"
-colnames(sub_bac)[colnames(sub_bac) == "utc_date_sampled_yyyymmdd"] <- "date_utc"
-sub_bac2 <- sub_bac %>% filter(GID %in% network_GID)
-sub_bac2$ID <- "bacteria"
-sub <- combine(sub_diatom2, sub_bac2)
-sub <- distinct(sub)
+"euk;Thalassiosira;Eb1000094")
 ```
 ```{r}
 ggplot(diatoms_surf %>% dplyr::filter(GID %in% NSI & uniqcode == "NSI"), aes(x=season, y=RA.percent, fill = uniqcode)) + 
@@ -790,5 +1057,95 @@ ggplot(diatoms_surf %>% dplyr::filter(GID %in% MAI & uniqcode == "MAI"), aes(x=s
   scale_fill_manual(values = "#A65628")
 ```
 
+## Figure S4 (Temporal barplot + heatmap among photoautotroph)
+```{r}
+#Make a subset of the all dataset 
+diatoms.temp <- diatoms_rare %>%  filter(uniqcode %in% c("NSI", "PHB", "MAI")) 
+diatoms.temp <- diatoms.temp %>%  filter(year %in% c("2017", "2018", "2019"))
+diatoms.temp <- diatoms.temp %>% filter(depth_m ==2)
+plot.temp <- ungroup(diatoms.temp) %>% select("tax.Genus", "RA.percent", "uniqcode", "year", "month.abb", "date_utc", "season", "Prop_diatoms_phyto") 
+```
+```{r}
+Genus.order<-c("Achnanthes","Actinocyclus","Amphora","Araphid-pennate_X","Arcocellulus","Asterionellopsis","Asteromphalus","Attheya","Bacillaria","Bellerochea","Biddulphia","Brockmanniella","Cerataulina","Corethron","Coscinodiscus","Cyclotella","Cymbella","Dactyliosolen","Delphineis","Detonula","Ditylum","Entomoneis","Epithemia","Eucampia","Eunotogramma","Fragilariopsis","Guinardia","g__unassigned","Haslea","Helicotheca","Hemiaulus","Hemidiscaceae_X","Lauderia","Licmophora","Licmosphenia","Lithodesmium","Luticola","Mastodiscus","Mastogloia","Meuniera","Minidiscus","Minutocellus","Navicula","Odontella","Palmerina","Papiliocellulus","Planktoniella","Pleurosigma","Polar-centric-Mediophyceae_X","Porosira","Proboscia","Psammodictyon","Raphid-pennate_X","Shionodiscus","Stellarima","Stephanodiscus","Stephanopyxis","Striatella","Surirella","Tabularia","Talaroneis","Thalassionema","Thalassiothrix","Triceratium","Bacteriastrum","Cylindrotheca","Leptocylindrus","Nitzschia","Rhizosolenia","Skeletonema","Pseudo-nitzschia","Thalassiosira","Chaetoceros") 
+mycols73 <- c("#99EEFF","#33BBFF","#33DDFF","#086391","#5299E0","#007FFF","#004C99","#0dc9e5","#054261","#9EFADD","#73F1CA","#52E4BB","#3BCFAB","#2BB398","#A0E0F7","#7ECEED","#64B8DE","#4F9CC7","#3E7EA9","#ADBAFA","#899AF1","#6C7EE4","#5667CF","#4352B3","#D8BBFB","#C094F4","#AC74E8","#985CD5","#8548BB","#58156c","#F4C5FD","#EDA7F9","#E380EF","#D863DE","#C44CBF","#b43dd8","#FDC9E1","#FAADCF","#F189B4","#E46C98","#C74F6F","#FCBBBC","#ED7E80","#D75D5F","#E83535","#A93E3F","#8B4513","#A0522D","#A96928","#BD7E32","#CF923E","#DEA54D","#E9B65F","#724407","#F18109","#F29B0F","#F3B516","#F4CF1D","#FBFFB2","#A92A28","#BD3532","#D74945","#E45B55","#ED6F6A","#B8F792","#92ED6A","#6ADE4D","#3EC737","#28A93A","#99C745","#75A12D","#26912A","#1A6E20")
+names(mycols73) <- unique(Genus.order)
+```
+```{r}
+#Temporal PLOT
+ggplot(plot.temp, aes(x=date_utc, y=RA.percent, fill=factor(tax.Genus, levels = c(Genus.order)))) + 
+  geom_bar(stat='identity',width = 15) + #position = position_fill()  
+  facet_grid(uniqcode ~ .) +
+  theme(axis.text.x = element_text(angle = 90)) +
+  theme(legend.title = element_text(colour= "black", size=12, face= "bold" ))+
+  theme(legend.position = "right") +
+  guides(fill=guide_legend(ncol=2)) +    
+  theme_bw() +
+  theme(panel.grid.major = element_line(colour = "#d3d3d3"),
+              panel.grid.minor = element_blank(),
+              #panel.border = element_blank(),
+              panel.background = element_blank(),
+              plot.title = element_text(size = 14, family = "Arial", face = "bold"),
+              text=element_text(family = "Arial"),
+              axis.title = element_text(size = 20, family = "Arial",face="bold"),
+              axis.text.x = element_text(colour="black", size = 18, face = "bold", vjust = 0.6),
+              axis.text.y = element_text(colour="black", size = 18),
+              axis.line = element_line(size=0.5, colour = "black"),
+              legend.title = element_text(colour= "black", size=20, face= "bold" ),
+              legend.text = element_text(face = "italic", size = 14)) +
+  scale_fill_manual(values = mycols73, "Genus sp.") +
+  labs(y = "Relative Abundance", x = "")
+```
+```{r}
+library(hrbrthemes)
+## Heatmap
+heatmap_temp <- ggplot(diatoms.temp, aes(x=date_utc, y=uniqcode, fill = Prop_diatoms_phyto)) + # fill=tax.Genus
+  geom_tile(stat = "identity", width = 20) +
+  #theme_bw()  +
+  scale_fill_gradient(low="ivory", high="red") +
+  theme_ipsum() +
+  #theme(axis.text.x = element_text(angle = 65, vjust = 0.6)) +
+  #theme(legend.title = element_text(colour= "black", size=12, face= "bold" ))+
+  theme(legend.position = "right") +
+  labs(title = "Proportion of diatoms over phytoplankton community",
+       x = "",
+       y = "") 
+heatmap_temp
+```
 
-
+## Figure S5 (Temporal BACTERIA barplot)
+Group by tax.Genus to calculate a new average
+```{r}
+subsetbac <- bac_surf2 %>% select("tax.Family", "tax.Order", "tax.Genus", "sample", "abund_rare", "uniqcode", "utc_date_sampled_yyyymmdd", "prec")
+subsetbac <- subsetbac %>% filter(prec > 0.5)
+subsetbac <- subsetbac %>% separate(utc_date_sampled_yyyymmdd, c("year", "month", "day"), remove=F, sep= "-")
+subsetbac_total <- subsetbac %>% group_by(month, tax.Family, uniqcode) %>% dplyr::summarise(newtot = sum(abund_rare))
+subsetbac_total2 <- subsetbac_total %>% group_by(uniqcode, month) %>% dplyr::summarise(sitetot = sum(newtot)) 
+subsetbac_total3 <- subsetbac_total2 %>% left_join(subsetbac_total)
+subsetbac_ra_month <- subsetbac_total3 %>% group_by(month, tax.Family, uniqcode) %>% dplyr::summarise(monthtot = (newtot / sitetot)*100)
+subsetbac_ra_month$month.abb <- factor(month.abb[as.integer(subsetbac_ra_month$month)], levels=c("Jan", "Feb","Mar", "Apr","May",  "Jun", "Jul","Aug","Sep","Oct","Nov", "Dec"))
+subsetbac_ra_month$uniqcode <- factor(subsetbac_ra_month$uniqcode, levels =rev(c("MAI", "KAI", "PHB","ROT", "NSI", "YON", "DAR")))
+```
+Plot - Relative abundance of each Genera per site per month
+```{r}
+palette <- distinctColorPalette(127)
+ggplot(subsetbac_ra_month, aes(x= month.abb, y=monthtot, fill = tax.Family)) + 
+        geom_bar(stat='identity', colour="black", size=0.25) + 
+        facet_grid(. ~ uniqcode, scales = 'free_y') +
+        theme(legend.position='right') + 
+        scale_fill_manual(values = palette, "Family") +
+        guides(fill=guide_legend(ncol=3)) +     
+        theme_bw() +
+        theme(panel.grid.major = element_line(colour = "#d3d3d3"),
+              panel.grid.minor = element_blank(),
+              #panel.border = element_blank(),
+              panel.background = element_blank(),
+              plot.title = element_text(size = 14, family = "Arial", face = "bold"),
+              text=element_text(family = "Arial"),
+              axis.title = element_text(size = 20, family = "Arial",face="bold"),
+              axis.text.x = element_text(colour="black", size = 12, face = "bold",angle = 65, vjust = 0.6),
+              axis.text.y = element_text(colour="black", size = 18),
+              axis.line = element_line(size=0.5, colour = "black"),
+              legend.title = element_text(colour= "black", size=20, face= "bold" ),
+              legend.text = element_text(size = 12)) + #face = "italic"
+        labs(y = "Proportion (%)", x = "")
+```
