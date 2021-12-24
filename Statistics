@@ -1,599 +1,75 @@
-## PERMANOVA - Figure 2 (community differences between sites) ------------------------------------
-```{r, to remove all na}
-diatoms_surf <- ungroup(diatoms_rare) %>% filter(depth_m == 2) ## 212 samples
-diatoms.na <- ungroup(diatoms_surf) %>% select("sample", "uniqcode", "date_utc", "GID", "depth_m", "day_length", "temperature_deg_c", "silicate_umol_per_l", "phosphate_umol_per_l", "nitrate_nitrite_umol_per_l", "ammonium_umol_per_l", "abund_rare","RA.percent", "year", "month", 'ASVid','tax.Kingdom', 'tax.Supergroup','tax.Division','tax.Class','tax.Family', 'tax.Genus','tax.Species', 'GID', 'ASV', "longitude_decimal_degrees", "latitude_decimal_degrees")
+3 Load libraries
 
-diatoms.na$day_length <- sqrt(diatoms.na$day_length)
-diatoms.na$temperature_deg_c <- sqrt(diatoms.na$temperature_deg_c)
-diatoms.na$silicate_umol_per_l <- sqrt(diatoms.na$silicate_umol_per_l)
-diatoms.na$phosphate_umol_per_l <- sqrt(diatoms.na$phosphate_umol_per_l)
-diatoms.na$nitrate_nitrite_umol_per_l <- sqrt(diatoms.na$nitrate_nitrite_umol_per_l)
-diatoms.na$ammonium_umol_per_l <- sqrt(diatoms.na$ammonium_umol_per_l)
-
-diatoms.na <- na.omit(diatoms.na) ## 100 sample
-diatoms.na <- distinct(diatoms.na)
-##arranging or ordering bring everything down to 174 sample only ... not sure about what's going on 
-diatoms.na <- diatoms.na %>% arrange(sample)
-#diatoms.na <- diatoms.na[order(diatoms_sub$sample),]
-```
-```{r, create a ASV matrix}
-com <- ungroup(diatoms.na) %>% select('sample', 'GID', 'RA.percent') %>% spread(key =sample, value=RA.percent, fill=0)  
-com.matrix <-  as.matrix(com[,-c(1)])
-row.names(com.matrix)<- paste0(com$GID)
-com.matrix.nz <- com.matrix[,colSums(com.matrix)!=0] 
-```
-```{r, Sample data table}
-env.vars <- ungroup(diatoms.na) %>% select(c("date_utc", "day_length", "temperature_deg_c", "silicate_umol_per_l", "depth_m", "sample",  "phosphate_umol_per_l", "nitrate_nitrite_umol_per_l", "ammonium_umol_per_l", "uniqcode", "longitude_decimal_degrees", "latitude_decimal_degrees")) 
-env.vars <- distinct(env.vars)
-env.vars <- env.vars %>% arrange(sample)
-rownames(env.vars) <- env.vars$sample
-env_data = sample_data(data.frame(env.vars))
-```
-```{r, Taxonomy table}
-taxonomy <- ungroup(diatoms.na) %>% select(c('ASVid','tax.Kingdom', 'tax.Supergroup','tax.Division','tax.Class','tax.Family', 'tax.Genus','tax.Species', 'GID', 'ASV'))
-taxonomy<- distinct(taxonomy) #make your list distinct
-tax<-as.matrix(taxonomy)
-rownames(tax) <- paste0(taxonomy$GID) #call the rows name with ASVid but add 18asv before it
-tax2<-tax[1:nrow(tax), 2:8]
-```
-```{r, physeq object}
-OTU = otu_table(com.matrix.nz, taxa_are_rows = TRUE)
-TAX = tax_table(tax2)
-physeq = phyloseq(OTU, TAX)
-physeq4 = merge_phyloseq(physeq, env_data)
-```
-phyloseq-class experiment-level object
-otu_table()   OTU Table:         [ 1022 taxa and 174 samples ]
-sample_data() Sample Data:       [ 174 samples by 12 sample variables ]
-tax_table()   Taxonomy Table:    [ 1022 taxa by 7 taxonomic ranks ]
-
-```{r, pairwise function}
-## function pairwise.adonis() - from GitHub 'pmartinezarbizu'
-pairwise.adonis <- function(x,factors, sim.function = 'vegdist', sim.method = 'bray', p.adjust.m ='bonferroni',reduce=NULL,perm=9999)
-{
-  
-  co <- combn(unique(as.character(factors)),2)
-  pairs <- c()
-  Df <- c()
-  SumsOfSqs <- c()
-  F.Model <- c()
-  R2 <- c()
-  p.value <- c()
-  
-  
-  for(elem in 1:ncol(co)){
-    if(inherits(x, 'dist')){
-      x1=as.matrix(x)[factors %in% c(as.character(co[1,elem]),as.character(co[2,elem])),
-                      factors %in% c(as.character(co[1,elem]),as.character(co[2,elem]))]
-      }
-  
-    else  (
-      if (sim.function == 'daisy'){
-            x1 = daisy(x[factors %in% c(co[1,elem],co[2,elem]),],metric=sim.method)
-        } 
-      else{x1 = vegdist(x[factors %in% c(co[1,elem],co[2,elem]),],method=sim.method)}
-    )
-    
-    ad <- adonis(x1 ~ factors[factors %in% c(co[1,elem],co[2,elem])],
-                 permutations = perm);
-    pairs <- c(pairs,paste(co[1,elem],'vs',co[2,elem]));
-    Df <- c(Df,ad$aov.tab[1,1])
-	SumsOfSqs <- c(SumsOfSqs, ad$aov.tab[1,2])
-	F.Model <- c(F.Model,ad$aov.tab[1,4]);
-    R2 <- c(R2,ad$aov.tab[1,5]);
-    p.value <- c(p.value,ad$aov.tab[1,6])
-  }
-  p.adjusted <- p.adjust(p.value,method=p.adjust.m)
-  
-  sig = c(rep('',length(p.adjusted)))
-  sig[p.adjusted <= 0.05] <-'.'
-  sig[p.adjusted <= 0.01] <-'*'
-  sig[p.adjusted <= 0.001] <-'**'
-  sig[p.adjusted <= 0.0001] <-'***'
-  pairw.res <- data.frame(pairs,Df,SumsOfSqs,F.Model,R2,p.value,p.adjusted,sig)
-  
-  if(!is.null(reduce)){
-    pairw.res <- subset (pairw.res, grepl(reduce,pairs))
-    pairw.res$p.adjusted <- p.adjust(pairw.res$p.value,method=p.adjust.m)
-    
-    sig = c(rep('',length(pairw.res$p.adjusted)))
- 	sig[pairw.res$p.adjusted <= 0.1] <-'.'
-	sig[pairw.res$p.adjusted <= 0.05] <-'*'
-	sig[pairw.res$p.adjusted <= 0.01] <-'**'
-	sig[pairw.res$p.adjusted <= 0.001] <-'***'
-    pairw.res <- data.frame(pairw.res[,1:7],sig)
-  }
-  class(pairw.res) <- c("pwadonis", "data.frame")
-  return(pairw.res)
-} 
-```
-
-```{r, make abundance RA}
-library(microbiome)
-#pseq.rel <- microbiome::transform(physeq1, "compositional")
-asv <- abundances(physeq4)
-meta <- meta(physeq4)
-```
 ```{r}
-permanova <- adonis2(t(asv) ~ uniqcode,
-               data = meta, permutations=9999, method = "bray")
-permanova
-
-permanova2 <- adonis2(t(com.matrix.nz) ~ uniqcode,
-               data = env.vars, permutations=9999, method = "bray")
-permanova2
-
-perm.pairwise <- pairwise.adonis(t(asv), meta$uniqcode, 
-                                 sim.function = "vegdist",
-                                 sim.method = "bray",
-                                 p.adjust.m = "BH") ## x=OTU matrix not
-perm.pairwise
-
-# P-value
-print(as.data.frame(permanova$aov.tab)["uniqcode", "Pr(>F)"])
-permanova$aov.tab
+library(tidyverse)
+library(dplyr)
+library(tidyr)
+library(ggplot2)
+library(ggpubr)
+lirbary(broom) # for the tidy() function
+library(vegan)
+library(FSA) # for figure 4
+library(writexl)
+library(readxl)
+library(rstatix)
 ```
--> with phyloseq object  ------------
 
-Permutation test for adonis under reduced model
-Terms added sequentially (first to last)
-Permutation: free
-Number of permutations: 9999
-
-adonis2(formula = t(asv) ~ uniqcode, data = meta, permutations = 9999, method = "bray")
-          Df SumOfSqs      R2      F Pr(>F)    
-uniqcode   6    8.393 0.25149 5.3197  1e-04 ***
-Residual  95   24.981 0.74851                  
-Total    101   33.374 1.00000                  
-
--> with the matrix ------------
-
-Permutation test for adonis under reduced model
-Terms added sequentially (first to last)
-Permutation: free
-Number of permutations: 9999
-
-adonis2(formula = t(com.matrix.nz) ~ uniqcode, data = env.vars, permutations = 9999, method = "bray")
-          Df SumOfSqs      R2      F Pr(>F)    
-uniqcode   6    8.393 0.25149 5.3197  1e-04 ***
-Residual  95   24.981 0.74851                  
-Total    101   33.374 1.00000                  
-
-## MANTEL test ------------------------------------
+## STATS - Figure 2 (Kruskal-Wallis & Wilcoxon) -----------------------------------------
 ```{r}
-diatoms_surf <- ungroup(diatoms_rare) %>% filter(depth_m == 2) ## 221 samples
-diatoms_sub2 <- ungroup(diatoms_surf) %>% select("date_utc", "day_length", "temperature_deg_c", "silicate_umol_per_l", "depth_m", "sample", "phosphate_umol_per_l", "nitrate_nitrite_umol_per_l", "ammonium_umol_per_l", "uniqcode","latitude_decimal_degrees", "longitude_decimal_degrees", "RA.percent", "GID", "abund_rare", 'ASVid','tax.Kingdom', 'tax.Supergroup','tax.Division','tax.Class','tax.Family', 'tax.Genus','tax.Species', 'GID', 'ASV', "season", "climatic_zone", "Prop_diatoms_phyto")
-diatoms_sub2$day_length <- sqrt(diatoms_sub2$day_length)
-diatoms_sub2$temperature_deg_c <- sqrt(diatoms_sub2$temperature_deg_c)
-diatoms_sub2$silicate_umol_per_l <- sqrt(diatoms_sub2$silicate_umol_per_l)
-diatoms_sub2$phosphate_umol_per_l <- sqrt(diatoms_sub2$phosphate_umol_per_l)
-diatoms_sub2$nitrate_nitrite_umol_per_l <- sqrt(diatoms_sub2$nitrate_nitrite_umol_per_l)
-diatoms_sub2$ammonium_umol_per_l <- sqrt(diatoms_sub2$ammonium_umol_per_l)
-diatoms_sub2 <- na.omit(diatoms_sub2) ## 175 sample
-diatoms_sub2 <- diatoms_sub2 %>% arrange(sample)
-```
-```{r, create a ASV matrix}
-com <- ungroup(diatoms_sub2) %>% select('sample', 'GID', 'RA.percent') %>% spread(key =GID, value=RA.percent, fill=0)  
-com.matrix <-  as.matrix(com[,-c(1)])
-row.names(com.matrix)<- paste0(com$sample)
-com.matrix.nz <- com.matrix[,colSums(com.matrix)!=0] 
-```
-```{r, Sample data table}
-env.vars <- diatoms_sub2 %>% select(c("date_utc", "depth_m", "sample", "uniqcode", "day_length", "temperature_deg_c", "silicate_umol_per_l", "phosphate_umol_per_l", "nitrate_nitrite_umol_per_l", "ammonium_umol_per_l",  "longitude_decimal_degrees", "latitude_decimal_degrees"))
-env.vars <- distinct(env.vars)
-env.vars <- env.vars %>% arrange(sample)
-rownames(env.vars) <- env.vars$sample
-```
-```{r, convert to distance matrix}
-library(geosphere)
-dist.abund = vegdist(com.matrix.nz, method = "bray", na.rm = TRUE)
-dist.temp = dist(env.vars$temperature_deg_c, method = "euclidean")
-dist.silicate = dist(env.vars$silicate_umol_per_l, method = "euclidean")
-dist.ligth = dist(env.vars$day_length, method = "euclidean")
-dist.phos = dist(env.vars$phosphate_umol_per_l, method = "euclidean")
-dist.nitr = dist(env.vars$nitrate_nitrite_umol_per_l, method = "euclidean")
-dist.amon = dist(env.vars$ammonium_umol_per_l, method = "euclidean")
-#dist.sal = dist(env.vars$salinity_psu...12, method = "euclidean")
-#longitude and latitude 
-geo = data.frame(env.vars$longitude_decimal_degrees, env.vars$latitude_decimal_degrees)
-d.geo = distm(geo, fun = distHaversine)
-dist.geo = as.dist(d.geo)
-#all env
-env = env.vars %>% select(5:12)
-dist.env = dist(env, method = "euclidean")
-```
-```{r, spearman correlation test}
-#abundance vs temperature 
-abund_temp = mantel(dist.abund, dist.temp, method = "spearman", permutations = 999, na.rm = TRUE)
-abund_temp
-#abundance vs silicate 
-abund_silicate = mantel(dist.abund, dist.silicate, method = "spearman", permutations = 999, na.rm = TRUE) 
-abund_silicate
-#abundance vs day length 
-abund_ligth = mantel(dist.abund, dist.ligth, method = "spearman", permutations = 999, na.rm = TRUE)
-abund_ligth
-#abundance vs nitrate 
-abund_nitrate = mantel(dist.abund, dist.nitr, method = "spearman", permutations = 999, na.rm = TRUE) 
-abund_nitrate
-#abundance vs ammonium 
-abund_amonium = mantel(dist.abund, dist.amon, method = "spearman", permutations = 999, na.rm = TRUE) 
-abund_amonium
-#abundance vs phosphate 
-abund_phosphate = mantel(dist.abund, dist.phos, method = "spearman", permutations = 999, na.rm = TRUE) 
-abund_phosphate
-#abundance vs salinity
-#abund_salinity = mantel(dist.abund, dist.sal, method = "spearman", permutations = 999, na.rm = TRUE)
-#abund_salinity
-#abundance vs geo
-abund_geo = mantel(dist.abund, dist.geo, method = "spearman", permutations = 999, na.rm = TRUE) 
-abund_geo
-#abundance vs env (daylenght, temperature,silicate,phosphate,nitrate,ammonium)
-abund_env = mantel(dist.abund, dist.env, method = "spearman", permutations = 999, na.rm = TRUE) 
-abund_env
+## Temperature
+kruskal.test(env_data$temperature_deg_c ~ env_data$uniqcode)
+temp_res <- pairwise.wilcox.test(env_data$temperature_deg_c, env_data$uniqcode, p.adjust.method = "BH") %>% tidy() %>% as.data.frame()
+## Phosphate 
+phosphate <- env_data %>% filter(!sample == c("34237")) # = outlier removed in the figure
+kruskal.test(phosphate$phosphate_umol_per_l ~ phosphate$uniqcode)
+phos_res <- pairwise.wilcox.test(phosphate$phosphate_umol_per_l, phosphate$uniqcode, p.adjust.method = "BH") %>% tidy() %>% as.data.frame()
+## Ammonium 
+ammonium <- env_data %>% filter(!sample == c("21862", "21952")) # = outlier removed in the figure
+kruskal.test(env_data$ammonium_umol_per_l ~ env_data$uniqcode)
+amm_res <- pairwise.wilcox.test(ammonium$ammonium_umol_per_l, ammonium$uniqcode, p.adjust.method = "BH") %>% tidy() %>% as.data.frame()
+## Nitrate 
+nitrate <- env_data %>% filter(!sample == c("35355")) # = outlier removed in the figure
+kruskal.test(env_data$nitrate_nitrite_umol_per_l ~ env_data$uniqcode)
+nitr_res <- pairwise.wilcox.test(nitrate$nitrate_nitrite_umol_per_l, nitrate$uniqcode, p.adjust.method = "BH") %>%  tidy() %>%  as.data.frame()
+## Day length 
+kruskal.test(env_data$day_length ~ env_data$uniqcode)
+day_res <- pairwise.wilcox.test(env_data$day_length, env_data$uniqcode, p.adjust.method = "BH") %>%
+  tidy() %>%  as.data.frame()
+## Silicate 
+kruskal.test(env_data$silicate_umol_per_l ~ env_data$uniqcode)
+sili_res <- pairwise.wilcox.test(env_data$silicate_umol_per_l, env_data$uniqcode, p.adjust.method = "BH") %>% tidy() %>% as.data.frame()
+## Salinity 
+kruskal.test(env_data$salinity_psu...12 ~ env_data$uniqcode)
+sali_res <- pairwise.wilcox.test(env_data$salinity_psu...12, env_data$uniqcode, p.adjust.method = "BH") %>% tidy() %>% as.data.frame()
+
+## Create a column with the variable tested
+temp_res <- temp_res %>% mutate(var = "temperature_deg_c")
+phos_res <- phos_res %>% mutate(var = "phosphate_umol_per_l")
+amm_res <- amm_res %>% mutate(var = "ammonium_umol_per_l")
+nitr_res <- nitr_res %>% mutate(var = "nitrate_nitrite_umol_per_l")
+day_res <- day_res %>% mutate(var = "day_length")
+sili_res <- sili_res %>% mutate(var = "silicate_umol_per_l")
+sali_res <- sali_res %>% mutate(var = "salinity_psu...12")
+
+## Merge all the files together to save it
+env_pairwisewilcoxon <- combine(temp_res,phos_res,amm_res,nitr_res,day_res,sili_res,sali_res)
+
+## Create Table with min/max/sd for each site 
+## Temperature
+temp.av <- env_data %>% group_by(uniqcode) %>% summarise(mean = mean(Temperature), sd = sd(Temperature), max = max(Temperature), min = min(Temperature))
+## Silicate
+silica.av <- env_data %>% group_by(uniqcode) %>% summarise(mean = mean(silicate_umol_per_l), sd = sd(silicate_umol_per_l), max = max(silicate_umol_per_l), min = min(silicate_umol_per_l)) 
+## Phosphate
+phosphate.av <- env_data %>% group_by(uniqcode) %>% summarise(mean = mean(Phosphate), sd = sd(Phosphate), max = max(Phosphate), min = min(Phosphate))
+## Ammonium
+ammonium.av <- env_data %>% group_by(uniqcode) %>% summarise(mean = mean(Amonium), sd = sd(Amonium), max = max(Amonium), min = min(Amonium))
+##  Nitrate
+nitrate.av <- env_data %>% group_by(uniqcode) %>% summarise(mean = mean(Nitrate), sd = sd(Nitrate), max = max(Nitrate), min = min(Nitrate))
+## Salinity
+salinity.av <- env_data %>% group_by(uniqcode) %>% summarise(mean = mean(salinity_psu...12), sd = sd(salinity_psu...12), max = max(salinity_psu...12), min = min(salinity_psu...12))
 ```
 
-## metagenomeSeq - (ASVs differential abund) ------------------------------------
-```{r, load file}
-diatoms_css <- read_csv("~/PHD/BPA_Metadata_Analysis/R_Notebook/diatoms_CSS_100521.csv") ## 58109 55
-diatoms_css$uniqcode <- factor(diatoms_css$uniqcode, levels =rev(c("MAI", "KAI", "PHB","ROT", "NSI", "YON", "DAR")))
-diatoms_css <- diatoms_css %>% filter(year > 2014)
-diatoms_css_surf <- diatoms_css %>% filter(depth_m == 2)
-```
-```{r, create a phyloseq object with css abund}
-#otu_table
-diat <- ungroup(diatoms_css_surf) %>% select('sample', 'GID', 'euk_CSS') %>% spread(key =sample, value=euk_CSS, fill=0)
-diat.matrix <-  as.matrix(diat[,-c(1)])
-row.names(diat.matrix)<- diat$GID
-diat.matrix.nz <- diat.matrix[,colSums(diat.matrix)!=0] 
-#metadata
-env.vars <- ungroup(diatoms_css_surf) %>% select(c("sample", "uniqcode")) 
-env.vars <- distinct(env.vars)
-rownames(env.vars) <- env.vars$sample
-env_data = sample_data(data.frame(env.vars))
-#taxonomy_table
-taxonomy <- ungroup(diatoms_css_surf) %>% select(c('GID','tax.Kingdom', 'tax.Supergroup','tax.Division','tax.Class','tax.Family', 'tax.Genus','tax.Species', 'ASV'))
-taxonomy<- distinct(taxonomy) #make your list distinct
-tax<-as.matrix(taxonomy)
-rownames(tax) <- taxonomy$GID #call the rows name with GID but add 18asv before it
-tax2<-tax[1:nrow(tax), 2:8]
-#phyloseq object
-OTU = otu_table(diat.matrix.nz, taxa_are_rows = TRUE)
-TAX = tax_table(tax2)
-physeq = phyloseq(OTU, TAX)
-physeq_diat = merge_phyloseq(physeq, env_data)
-```
-```{r, MRexperiment from phyloseq object}
-library(metagenomeSeq)
-obj.norm =  phyloseq_to_metagenomeSeq(physeq_diat)
-```
-```{r, FC and t-statistics}
-# fitZig model set up 
-all_groups = factor(pData(obj.norm)$uniqcode)
-mod = model.matrix(~all_groups) 
-colnames(mod) = levels(all_groups)
-# fitZig model fitting
-res = fitZig(obj = obj.norm ,mod = mod, useCSSoffset = FALSE)
-zigFit <- res@fit
-finalMod = zigFit$design
-```
-```{r, JB output result table}
-# run diff abundance testing on all combinations...
-all_combinations = expand.grid(all_groups, all_groups)
-all_combinations = all_combinations[!duplicated(with(all_combinations, paste(Var1,Var2))),]
-all_combinations = all_combinations[all_combinations$Var1 != all_combinations$Var2,]
-ordered_c = apply(all_combinations, 1, function(x) paste(sort(x), collapse = "-"))
-all_combinations = all_combinations[which(!(duplicated(ordered_c))),]
+## STATS - Figure 3 (PERMANOVA) -----------------------------------------
 
-for(i in 1:nrow(all_combinations)){
-  group1 = as.character(all_combinations$Var1[i])
-  group2 = as.character(all_combinations$Var2[i])
 
-  myContrasts = paste0(group1,"-",group2)
-  # contrasts (same as in limma)
-  contrast.matrix = makeContrasts(myContrasts, levels = finalMod)
-  fit = contrasts.fit(zigFit, contrast.matrix)
-  fit = eBayes(fit)
-  diffAbundant = (topTable(fit, number=9999999, p.value = 0.05)) # only write features with pvalue < 0.05
-  write.csv(diffAbundant, file = paste0("DiffAbundant_fitZig_", group1, "_v_", group2, "_", "110521.csv"), sep=",", quote=F)
-}
-```
-```{r, 1 file for with all data - My way}
-# run diff abundance testing on all combinations...
-all_combinations = expand.grid(all_groups, all_groups)
-all_combinations = all_combinations[!duplicated(with(all_combinations, paste(Var1,Var2))),]
-all_combinations = all_combinations[all_combinations$Var1 != all_combinations$Var2,]
-ordered_c = apply(all_combinations, 1, function(x) paste(sort(x), collapse = "-"))
-all_combinations = all_combinations[which(!(duplicated(ordered_c))),]
 
-# make a data.frame (for adding the taxonomy column later)
-diatoms.df = as.data.frame(diatoms_css_surf)
-
-# initialise variable to hold all the results
-diffAbundant.ALL = NULL
-for(i in 1:nrow(all_combinations)){
-  group1 = as.character(all_combinations$Var1[i])
-  group2 = as.character(all_combinations$Var2[i])
-  myContrasts = paste0(group1,"-",group2)
-  # contrasts (same as in limma)
-  contrast.matrix = makeContrasts(myContrasts, levels = finalMod)
-  fit = contrasts.fit(zigFit, contrast.matrix)
-  fit = eBayes(fit) # output eBays, moderated t-statistic or F-statistics ..etc
-  diffAbundant = (topTable(fit, number=9999999, p.value = 0.05)) # only write features with pvalue < 0.05
-  diatoms.df = as.data.frame(diatoms_css_surf)
-  diffAbundant = cbind(diffAbundant, GID = diatoms.df$GID[match(rownames(diffAbundant), diatoms.df$GID)])
-  diffAbundant$group1 = group1
-  diffAbundant$group2 = group2
-  
-  # add this comparisons results to the data.frame with all results
-  diffAbundant.ALL = rbind(diffAbundant.ALL, diffAbundant)
-}
-
-#Split the GID column into Genera and ID
-diffAbundant.ALL.tax <- diffAbundant.ALL %>% separate('GID', c("euk","tax.Genus", "ID"), remove=F, sep=';')
-diffAbundant.ALL.tax2 <- diffAbundant.ALL.tax %>% filter(adj.P.Val > 0)
-
-# write all results to a single csv
-write_csv(diffAbundant.ALL.tax2, paste0("DiffAbundant_fitZig_surf_110521.csv"))
-library(writexl)
-writexl::write_xlsx(diffAbundant.ALL.tax2, paste0("DiffAbundant_fitZig_surf_110521.xlsx"))
-```
-
-## Season Similarity STATS - (SPPS) ------------------------------------
-Make all the initial dissimilarity matrix in R, modify them in excel and then do stats in SPSS (R give same results)
-```{r}
-diatoms_rare <- diatoms_rare %>% mutate(twoseason = NA)
-diatoms_rare$twoseason[str_detect(diatoms_rare$month.abb, "Jan")] <- "summer"
-diatoms_rare$twoseason[str_detect(diatoms_rare$month.abb, "Feb")] <- "summer"
-diatoms_rare$twoseason[str_detect(diatoms_rare$month.abb, "Mar")] <- "winter"
-diatoms_rare$twoseason[str_detect(diatoms_rare$month.abb, "Apr")] <- "winter"
-diatoms_rare$twoseason[str_detect(diatoms_rare$month.abb, "May")] <- "winter"
-diatoms_rare$twoseason[str_detect(diatoms_rare$month.abb, "Jun")] <- "winter"
-diatoms_rare$twoseason[str_detect(diatoms_rare$month.abb, "Jul")] <- "winter"
-diatoms_rare$twoseason[str_detect(diatoms_rare$month.abb, "Aug")] <- "winter"
-diatoms_rare$twoseason[str_detect(diatoms_rare$month.abb, "Sep")] <- "summer"
-diatoms_rare$twoseason[str_detect(diatoms_rare$month.abb, "Oct")] <- "summer"
-diatoms_rare$twoseason[str_detect(diatoms_rare$month.abb, "Nov")] <- "summer"
-diatoms_rare$twoseason[str_detect(diatoms_rare$month.abb, "Dec")] <- "summer"
-diatoms_surf <- diatoms_rare %>% filter(depth_m ==2)
-```
-
-```{r, DAR bray-curtis}
-#Subset DAR
-dar <- diatoms_surf %>% select("sample", "abund_rare", "date_utc", "twoseason","uniqcode","GID") %>% filter(uniqcode %in% "DAR") %>%  arrange(date_utc)
-#ASV matrix
-dar_wide <- dar %>% select("sample", "abund_rare", "GID") %>% spread(key = GID, value = abund_rare, fill=0) 
-dar_wide <- dar_wide[order(dar_wide$sample),]
-dar.matrix <-  as.matrix(dar_wide[,-c(1)]) 
-row.names(dar.matrix)<- paste0(dar_wide$sample)
-dar.matrix.nz <- dar.matrix[,colSums(dar.matrix)!=0] 
-#metadata data frame
-dar_metadata <- dar %>% select("sample", "date_utc", "twoseason","uniqcode")
-dar_metadata <- distinct(dar_metadata)
-dar_metadata <- dar_metadata[order(dar_metadata$sample),]
-#make the BC matrix 
-dar_bc <- vegdist(dar.matrix.nz, method = "bray")
-dar_bc_matrix <- as.matrix(dar_bc)
-dar_bc_df <- as.data.frame(dar_bc_matrix)
-dar_bc_df$sample <- rownames(dar_bc_df)
-#left join the season / metadata again 
-dar_bc_df$sample <- as.numeric(dar_bc_df$sample)
-dar_bc_wide <- dar_bc_df %>% left_join(dar_metadata)
-row.names(dar_bc_wide) <- dar_bc_wide$sample
-dar_bc_wide <- dar_bc_wide  %>%  arrange(date_utc)
-#write a csv file
-library(writexl)
-writexl::write_xlsx(dar_bc_wide, "BCsimilarity_DARwide_Surfaces_110521.xlsx")
-```
-```{r, YON bray-curtis}
-#Subset YON
-yon <- diatoms_surf %>% select("sample", "abund_rare", "date_utc", "twoseason","uniqcode","GID") %>% filter(uniqcode %in% "YON") %>%  arrange(date_utc)
-#ASV matrix
-yon_wide <- yon %>% select("sample", "abund_rare", "GID") %>% spread(key = GID, value = abund_rare, fill=0) 
-yon_wide <- yon_wide[order(yon_wide$sample),]
-yon.matrix <-  as.matrix(yon_wide[,-c(1)]) 
-row.names(yon.matrix)<- paste0(yon_wide$sample)
-yon.matrix.nz <- yon.matrix[,colSums(yon.matrix)!=0] 
-#metadata data frame
-yon_metadata <- yon %>% select("sample", "date_utc", "twoseason","uniqcode")
-yon_metadata <- distinct(yon_metadata)
-yon_metadata <- yon_metadata[order(yon_metadata$sample),]
-#make the BC matrix 
-yon_bc <- vegdist(yon.matrix.nz, method = "bray")
-yon_bc_matrix <- as.matrix(yon_bc)
-yon_bc_df <- as.data.frame(yon_bc_matrix)
-yon_bc_df$sample <- rownames(yon_bc_df)
-#left join the season / metadata again 
-yon_bc_df$sample <- as.numeric(yon_bc_df$sample)
-yon_bc_wide <- yon_bc_df %>% left_join(yon_metadata)
-row.names(yon_bc_wide) <- yon_bc_wide$sample
-yon_bc_wide <- yon_bc_wide  %>%  arrange(date_utc)
-#write a csv file
-library(writexl)
-writexl::write_xlsx(yon_bc_wide, "BCsimilarity_YONwide_Surfaces_110521.xlsx")
-```
-```{r, NSI bray-curtis}
-#Subset NSI
-nsi <- diatoms_surf %>% select("sample", "abund_rare", "date_utc", "twoseason","uniqcode","GID") %>% filter(uniqcode %in% "NSI") %>%  arrange(date_utc)
-#ASV matrix
-nsi_wide <- nsi %>% select("sample", "abund_rare", "GID") %>% spread(key = GID, value = abund_rare, fill=0) 
-nsi_wide <- nsi_wide[order(nsi_wide$sample),]
-nsi.matrix <-  as.matrix(nsi_wide[,-c(1)]) 
-row.names(nsi.matrix)<- paste0(nsi_wide$sample)
-nsi.matrix.nz <- nsi.matrix[,colSums(nsi.matrix)!=0] 
-#metadata data frame
-nsi_metadata <- nsi %>% select("sample", "date_utc", "twoseason","uniqcode")
-nsi_metadata <- distinct(nsi_metadata)
-nsi_metadata <- nsi_metadata[order(nsi_metadata$sample),]
-#make the BC matrix 
-nsi_bc <- vegdist(nsi.matrix.nz, method = "bray")
-nsi_bc_matrix <- as.matrix(nsi_bc)
-nsi_bc_df <- as.data.frame(nsi_bc_matrix)
-nsi_bc_df$sample <- rownames(nsi_bc_df)
-#left join the season / metadata again 
-nsi_bc_df$sample <- as.numeric(nsi_bc_df$sample)
-nsi_bc_wide <- nsi_bc_df %>% left_join(nsi_metadata)
-row.names(nsi_bc_wide) <- nsi_bc_wide$sample
-nsi_bc_wide <- nsi_bc_wide  %>%  arrange(date_utc)
-#write a csv file
-library(writexl)
-writexl::write_xlsx(nsi_bc_wide, "BCsimilarity_NSIwide_Surfaces_110521.xlsx")
-```
-```{r, ROT bray-curtis}
-#Subset ROT
-rot <- diatoms_surf %>% select("sample", "abund_rare", "date_utc", "twoseason","uniqcode","GID") %>% filter(uniqcode %in% "ROT") %>%  arrange(date_utc)
-#ASV matrix
-rot_wide <- rot %>% select("sample", "abund_rare", "GID") %>% spread(key = GID, value = abund_rare, fill=0) 
-rot_wide <- rot_wide[order(rot_wide$sample),]
-rot.matrix <-  as.matrix(rot_wide[,-c(1)]) 
-row.names(rot.matrix)<- paste0(rot_wide$sample)
-rot.matrix.nz <- rot.matrix[,colSums(rot.matrix)!=0] 
-#metadata data frame
-rot_metadata <- rot %>% select("sample", "date_utc", "twoseason","uniqcode")
-rot_metadata <- distinct(rot_metadata)
-rot_metadata <- rot_metadata[order(rot_metadata$sample),]
-#make the BC matrix 
-rot_bc <- vegdist(rot.matrix.nz, method = "bray")
-rot_bc_matrix <- as.matrix(rot_bc)
-rot_bc_df <- as.data.frame(rot_bc_matrix)
-rot_bc_df$sample <- rownames(rot_bc_df)
-#left join the season / metadata again 
-rot_bc_df$sample <- as.numeric(rot_bc_df$sample)
-rot_bc_wide <- rot_bc_df %>% left_join(rot_metadata)
-row.names(rot_bc_wide) <- rot_bc_wide$sample
-rot_bc_wide <- rot_bc_wide  %>%  arrange(date_utc)
-#write a csv file
-library(writexl)
-writexl::write_xlsx(rot_bc_wide, "BCsimilarity_ROTwide_Surfaces_110521.xlsx")
-```
-```{r, PHB bray-curtis}
-#Subset PHB
-phb <- diatoms_surf %>% select("sample", "abund_rare", "date_utc", "twoseason","uniqcode","GID") %>% filter(uniqcode %in% "PHB") %>%  arrange(date_utc)
-#ASV matrix
-phb_wide <- phb %>% select("sample", "abund_rare", "GID") %>% spread(key = GID, value = abund_rare, fill=0) 
-phb_wide <- phb_wide[order(phb_wide$sample),]
-phb.matrix <-  as.matrix(phb_wide[,-c(1)]) 
-row.names(phb.matrix)<- paste0(phb_wide$sample)
-phb.matrix.nz <- phb.matrix[,colSums(phb.matrix)!=0] 
-#metadata data frame
-phb_metadata <- phb %>% select("sample", "date_utc", "twoseason","uniqcode")
-phb_metadata <- distinct(phb_metadata)
-phb_metadata <- phb_metadata[order(phb_metadata$sample),]
-#make the BC matrix 
-phb_bc <- vegdist(phb.matrix.nz, method = "bray")
-phb_bc_matrix <- as.matrix(phb_bc)
-phb_bc_df <- as.data.frame(phb_bc_matrix)
-phb_bc_df$sample <- rownames(phb_bc_df)
-#left join the season / metadata again 
-phb_bc_df$sample <- as.numeric(phb_bc_df$sample)
-phb_bc_wide <- phb_bc_df %>% left_join(phb_metadata)
-row.names(phb_bc_wide) <- phb_bc_wide$sample
-phb_bc_wide <- phb_bc_wide  %>%  arrange(date_utc)
-#write a csv file
-library(writexl)
-writexl::write_xlsx(phb_bc_wide, "BCsimilarity_PHBwide_Surfaces_110521.xlsx")
-```
-```{r, KAI bray-curtis}
-#Subset KAI
-kai <- diatoms_surf %>% select("sample", "abund_rare", "date_utc", "twoseason","uniqcode","GID") %>% filter(uniqcode %in% "KAI") %>%  arrange(date_utc)
-#ASV matrix
-kai_wide <- kai %>% select("sample", "abund_rare", "GID") %>% spread(key = GID, value = abund_rare, fill=0) 
-kai_wide <- kai_wide[order(kai_wide$sample),]
-kai.matrix <-  as.matrix(kai_wide[,-c(1)]) 
-row.names(kai.matrix)<- paste0(kai_wide$sample)
-kai.matrix.nz <- kai.matrix[,colSums(kai.matrix)!=0] 
-#metadata data frame
-kai_metadata <- kai %>% select("sample", "date_utc", "twoseason","uniqcode")
-kai_metadata <- distinct(kai_metadata)
-kai_metadata <- kai_metadata[order(kai_metadata$sample),]
-#make the BC matrix 
-kai_bc <- vegdist(kai.matrix.nz, method = "bray")
-kai_bc_matrix <- as.matrix(kai_bc)
-kai_bc_df <- as.data.frame(kai_bc_matrix)
-kai_bc_df$sample <- rownames(kai_bc_df)
-#left join the season / metadata again 
-kai_bc_df$sample <- as.numeric(kai_bc_df$sample)
-kai_bc_wide <- kai_bc_df %>% left_join(kai_metadata)
-row.names(kai_bc_wide) <- kai_bc_wide$sample
-kai_bc_wide <- kai_bc_wide  %>%  arrange(date_utc)
-#write a csv file
-library(writexl)
-writexl::write_xlsx(kai_bc_wide, "BCsimilarity_KAIwide_Surfaces_110521.xlsx")
-```
-```{r, MAI bray-curtis}
-#Subset MAI
-mai <- diatoms_surf %>% select("sample", "abund_rare", "date_utc", "twoseason","uniqcode","GID") %>% filter(uniqcode %in% "MAI") %>%  arrange(date_utc)
-#ASV matrix
-mai_wide <- mai %>% select("sample", "abund_rare", "GID") %>% spread(key = GID, value = abund_rare, fill=0) 
-mai_wide <- mai_wide[order(mai_wide$sample),]
-mai.matrix <-  as.matrix(mai_wide[,-c(1)]) 
-row.names(mai.matrix)<- paste0(mai_wide$sample)
-mai.matrix.nz <- mai.matrix[,colSums(mai.matrix)!=0] 
-#metadata data frame
-mai_metadata <- mai %>% select("sample", "date_utc", "twoseason","uniqcode")
-mai_metadata <- distinct(mai_metadata)
-mai_metadata <- mai_metadata[order(mai_metadata$sample),]
-#make the BC matrix 
-mai_bc <- vegdist(mai.matrix.nz, method = "bray")
-mai_bc_matrix <- as.matrix(mai_bc)
-mai_bc_df <- as.data.frame(mai_bc_matrix)
-mai_bc_df$sample <- rownames(mai_bc_df)
-#left join the season / metadata again 
-mai_bc_df$sample <- as.numeric(mai_bc_df$sample)
-mai_bc_wide <- mai_bc_df %>% left_join(mai_metadata)
-row.names(mai_bc_wide) <- mai_bc_wide$sample
-mai_bc_wide <- mai_bc_wide  %>%  arrange(date_utc)
-#write a csv file
-library(writexl)
-writexl::write_xlsx(mai_bc_wide, "BCsimilarity_MAIwide_Surfaces_110521.xlsx")
-```
-Once you have modified all the file in excel and replaced the sample by the season you need to come back here and make them long format with first colum = season1 and the column name season2
-```{r,dar}
-DAR_bc <- read_excel("~/PHD/BPA_Metadata_Analysis/BCsimilarity_DARwide_Surfaces_110521.xlsx")
-## rename the first column season1 before to gather 
-names(DAR_bc)[names(DAR_bc) == "...1"] <- "season1"
-##gather the rest into season2
-colnames(DAR_bc)
-DAR_bc_long <- DAR_bc %>% gather(key="season2", value = 'similarity', 2:29)
-DAR_bc_long <- distinct(DAR_bc_long)
-write_csv(DAR_bc_long,"BCsim_long_DAR_surf_120521.csv")
-```
-```{r,yon}
-YON_bc <- read_excel("~/PHD/BPA_Metadata_Analysis/BCsimilarity_YONwide_Surfaces_110521.xlsx")
-## rename the first column season1 before to gather 
-names(YON_bc)[names(YON_bc) == "...1"] <- "season1"
-##gather the rest into season2
-colnames(YON_bc)
-YON_bc_long <- YON_bc %>% gather(key="season2", value = 'similarity', 2:24)
-YON_bc_long <- distinct(YON_bc_long)
-write_csv(YON_bc_long,"BCsim_long_YON_surf_120521.csv")
-```
-```{r,nsi}
-NSI_bc <- read_excel("~/PHD/BPA_Metadata_Analysis/BCsimilarity_NSIwide_Surfaces_110521.xlsx")
-## rename the first column season1 before to gather 
-names(NSI_bc)[names(NSI_bc) == "...1"] <- "season1"
-##gather the rest into season2
-colnames(NSI_bc)
-NSI_bc_long <- NSI_bc %>% gather(key="season2", value = 'similarity', 2:41)
-NSI_bc_long <- distinct(NSI_bc_long)
-write_csv(NSI_bc_long,"BCsim_long_NSI_surf_120521.csv")
-```
-```{r,rot}
-ROT_bc <- read_excel("~/PHD/BPA_Metadata_Analysis/BCsimilarity_ROTwide_Surfaces_110521.xlsx")
-## rename the first column season1 before to gather 
-names(ROT_bc)[names(ROT_bc) == "...1"] <- "season1"
-##gather the rest into season2
-colnames(ROT_bc)
-ROT_bc_long <- ROT_bc %>% gather(key="season2", value = 'similarity', 2:26)
-ROT_bc_long <- distinct(ROT_bc_long)
-write_csv(ROT_bc_long,"BCsim_long_ROT_surf_120521.csv")
-```
-```{r,phb}
-PHB_bc <- read_excel("~/PHD/BPA_Metadata_Analysis/BCsimilarity_PHBwide_Surfaces_110521.xlsx")
-## rename the first column season1 before to gather 
-names(PHB_bc)[names(PHB_bc) == "...1"] <- "season1"
-##gather the rest into season2
-colnames(PHB_bc)
-PHB_bc_long <- PHB_bc %>% gather(key="season2", value = 'similarity', 2:39)
-PHB_bc_long <- distinct(PHB_bc_long)
-write_csv(PHB_bc_long,"BCsim_long_PHB_surf_120521.csv")
-```
