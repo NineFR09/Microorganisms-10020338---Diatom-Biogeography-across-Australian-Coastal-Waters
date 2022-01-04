@@ -164,8 +164,8 @@ perm.pairwise <- pairwise.adonis(t(com.matrix.nz), env.vars$uniqcode,
 
 ```
 
-## STATS - Figure 5 (PERMANOVA) -----------------------------------------
-1) We made the the initial dissimilarity matrix in R, modify them in excel and then stats in SPSS (R give same results)
+## STATS - Figure 5 (Kruskal-Wallis) -----------------------------------------
+1) We made the the initial dissimilarity matrix in R, modify them in excel and then do Kruskal-Wallis test in SPSS (or R it give same results)
 ```{r}
 diatoms_rare <- diatoms_rare %>% mutate(twoseason = NA)
 diatoms_rare$twoseason[str_detect(diatoms_rare$month.abb, "Jan")] <- "summer"
@@ -303,3 +303,75 @@ phb.av <- BCsim_long_PHB %>% group_by(seasons) %>% dplyr::summarise(mean = mean(
 #MAI
 mai.av <- BCsim_long_MAI %>% group_by(seasons) %>% dplyr::summarise(mean = mean(similarity), sd = sd(similarity), max = max(similarity), min = min(similarity))
 ```
+
+## STATS - Figure 6 (Wilcoxon test) -----------------------------------------
+```{r}
+##Load the file with the average alpha diversity of bacteria
+bac_CCA_FamilyAV <- read.csv("~/PHD/CHAPTER1_BPAsequences_TimeSerie/bac_CCA_FamilyAV_080821.csv") 
+##to add the bacteria alpha diversity indices
+#diatoms_alpha <- left_join(diatoms_surf, alpha_bac)
+diatoms_fam <- left_join(diatoms_surf, bac_CCA_FamilyAV)
+diatoms_fam <- diatoms_fam %>% unite("year_season", c(year, season), remove=F, sep=';')
+```
+```{r, }
+env.vars2 <- diatoms_fam %>% dplyr::select(c("sample", "date_utc", "GID", "day_length", "temperature_deg_c", "silicate_umol_per_l","salinity_psu...12", "phosphate_umol_per_l", "nitrate_nitrite_umol_per_l", "ammonium_umol_per_l", "abund_rare", "Flavobacteriaceae",  "Rhodobacteraceae", "Alteromonadaceae_Marinobacter", "year_season", "year", "season", "uniqcode"))
+env.vars2 <- na.omit(env.vars2)
+env.vars2 <- distinct(env.vars2)
+env_data <- env.vars2
+```
+```{r}
+NSI <- env_data %>% filter(uniqcode == "NSI")
+PHB <- env_data %>% filter(uniqcode == "PHB")
+MAI <- env_data %>% filter(uniqcode == "MAI")
+```
+Then, we did pairwise Wilcoxon test for each environmental variable by season for each site separately using the following code (the same was done for PHB and MAI)
+```{r}
+## Temperature 
+kruskal.test(NSI$temperature_deg_c ~ NSI$season)
+NSI_temp_res <- pairwise.wilcox.test(NSI$temperature_deg_c, NSI$season, p.adjust.method = "BH") %>% tidy() %>% as.data.frame() %>% filter(p.value <0.05)
+## Phosphate 
+kruskal.test(NSI$phosphate_umol_per_l ~ NSI$season)
+NSI_phos_res <- pairwise.wilcox.test(NSI$phosphate_umol_per_l, NSI$season, p.adjust.method = "BH") %>% tidy() %>% as.data.frame() %>% filter(p.value <0.05)
+## Ammonium 
+kruskal.test(NSI$ammonium_umol_per_l ~ NSI$season)
+NSI_amm_res <- pairwise.wilcox.test(NSI$ammonium_umol_per_l, NSI$season, p.adjust.method = "BH") %>% tidy() %>% as.data.frame() %>% filter(p.value <0.05)
+## Nitrate 
+kruskal.test(NSI$nitrate_nitrite_umol_per_l ~ NSI$season)
+NSI_nitr_res <- pairwise.wilcox.test(NSI$nitrate_nitrite_umol_per_l, NSI$season, p.adjust.method = "BH") %>% tidy() %>% as.data.frame() %>% filter(p.value <0.05)
+## Day length 
+kruskal.test(NSI$day_length ~ NSI$season)
+NSI_day_res <- pairwise.wilcox.test(NSI$day_length, NSI$season, p.adjust.method = "BH") %>% tidy() %>% as.data.frame() %>% filter(p.value <0.05)
+## Silicate 
+kruskal.test(NSI$silicate_umol_per_l ~ NSI$season)
+NSI_sili_res <- pairwise.wilcox.test(NSI$silicate_umol_per_l, NSI$season, p.adjust.method = "BH") %>% tidy() %>% as.data.frame() %>% filter(p.value <0.05)
+## Salinity 
+kruskal.test(NSI$salinity_psu...12 ~ NSI$season)
+NSI_sali_res <- pairwise.wilcox.test(NSI$salinity_psu...12, NSI$season, p.adjust.method = "BH") %>% tidy() %>% as.data.frame() %>% filter(p.value <0.05)
+## Alteromonadaceae_Marinobacter 
+kruskal.test(NSI$Alteromonadaceae_Marinobacter ~ NSI$season)
+NSI_altero_res <- pairwise.wilcox.test(NSI$Alteromonadaceae_Marinobacter, NSI$season, p.adjust.method = "BH") %>% tidy() %>% as.data.frame() %>% filter(p.value <0.05)
+## Flavobacteriaceae 
+kruskal.test(NSI$Flavobacteriaceae ~ NSI$season)
+NSI_flavo_res <- pairwise.wilcox.test(NSI$Flavobacteriaceae, NSI$season, p.adjust.method = "BH") %>% tidy() %>% as.data.frame() %>% filter(p.value <0.05)
+## Rhodobacteraceae 
+kruskal.test(NSI$Rhodobacteraceae ~ NSI$season)
+NSI_rhodo_res <- pairwise.wilcox.test(NSI$Rhodobacteraceae, NSI$season, p.adjust.method = "BH") %>% tidy() %>% as.data.frame() %>% filter(p.value <0.05)
+
+
+## Create a column with the variable tested
+NSI_temp_res <- NSI_temp_res %>% mutate(var = "temperature_deg_c")
+NSI_phos_res <- NSI_phos_res %>% mutate(var = "phosphate_umol_per_l")
+NSI_amm_res <- NSI_amm_res %>% mutate(var = "ammonium_umol_per_l")
+NSI_nitr_res <- NSI_nitr_res %>% mutate(var = "nitrate_nitrite_umol_per_l")
+NSI_day_res <- NSI_day_res %>% mutate(var = "day_length")
+NSI_sili_res <- NSI_sili_res %>% mutate(var = "silicate_umol_per_l")
+NSI_sali_res <- NSI_sali_res %>% mutate(var = "salinity_psu...12")
+NSI_altero_res <- NSI_altero_res %>% mutate(var = "Alteromonadaceae_Marinobacter")
+NSI_flavo_res <- NSI_flavo_res %>% mutate(var = "Flavobacteriaceae")
+NSI_rhodo_res <- NSI_rhodo_res %>% mutate(var = "Rhodobacteraceae")
+
+##Merge all the files together
+NSI_pairwisewilcoxon <- combine(NSI_temp_res,NSI_phos_res,NSI_amm_res,NSI_nitr_res,NSI_day_res,NSI_sili_res,NSI_sali_res,NSI_altero_res,NSI_flavo_res,NSI_rhodo_res)
+#writexl::write_xlsx(NSI_pairwisewilcoxon, "NSI_pairwisewilcoxon_season.xlsx")
+```
+
