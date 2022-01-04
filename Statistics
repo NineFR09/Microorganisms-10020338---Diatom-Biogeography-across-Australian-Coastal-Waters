@@ -307,7 +307,7 @@ mai.av <- BCsim_long_MAI %>% group_by(seasons) %>% dplyr::summarise(mean = mean(
 ## STATS - Figure 6 (Wilcoxon test) -----------------------------------------
 ```{r}
 ##Load the file with the average alpha diversity of bacteria
-bac_CCA_FamilyAV <- read.csv("~/PHD/CHAPTER1_BPAsequences_TimeSerie/bac_CCA_FamilyAV_080821.csv") 
+bac_CCA_FamilyAV <- bac_subset2_wide2 
 ##to add the bacteria alpha diversity indices
 #diatoms_alpha <- left_join(diatoms_surf, alpha_bac)
 diatoms_fam <- left_join(diatoms_surf, bac_CCA_FamilyAV)
