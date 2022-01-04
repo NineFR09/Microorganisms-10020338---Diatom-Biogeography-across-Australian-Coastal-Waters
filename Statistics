@@ -164,3 +164,142 @@ perm.pairwise <- pairwise.adonis(t(com.matrix.nz), env.vars$uniqcode,
 
 ```
 
+## STATS - Figure 5 (PERMANOVA) -----------------------------------------
+1) We made the the initial dissimilarity matrix in R, modify them in excel and then stats in SPSS (R give same results)
+```{r}
+diatoms_rare <- diatoms_rare %>% mutate(twoseason = NA)
+diatoms_rare$twoseason[str_detect(diatoms_rare$month.abb, "Jan")] <- "summer"
+diatoms_rare$twoseason[str_detect(diatoms_rare$month.abb, "Feb")] <- "summer"
+diatoms_rare$twoseason[str_detect(diatoms_rare$month.abb, "Mar")] <- "winter"
+diatoms_rare$twoseason[str_detect(diatoms_rare$month.abb, "Apr")] <- "winter"
+diatoms_rare$twoseason[str_detect(diatoms_rare$month.abb, "May")] <- "winter"
+diatoms_rare$twoseason[str_detect(diatoms_rare$month.abb, "Jun")] <- "winter"
+diatoms_rare$twoseason[str_detect(diatoms_rare$month.abb, "Jul")] <- "winter"
+diatoms_rare$twoseason[str_detect(diatoms_rare$month.abb, "Aug")] <- "winter"
+diatoms_rare$twoseason[str_detect(diatoms_rare$month.abb, "Sep")] <- "summer"
+diatoms_rare$twoseason[str_detect(diatoms_rare$month.abb, "Oct")] <- "summer"
+diatoms_rare$twoseason[str_detect(diatoms_rare$month.abb, "Nov")] <- "summer"
+diatoms_rare$twoseason[str_detect(diatoms_rare$month.abb, "Dec")] <- "summer"
+diatoms_surf <- diatoms_rare %>% filter(depth_m ==2)
+```
+Create NSI Bray-Curtis dissimilarity matrix
+```{r}
+#Subset NSI
+nsi <- diatoms_surf %>% select("sample", "abund_rare", "date_utc", "twoseason","uniqcode","GID") %>% filter(uniqcode %in% "NSI") %>%  arrange(date_utc)
+#ASV matrix
+nsi_wide <- nsi %>% select("sample", "abund_rare", "GID") %>% spread(key = GID, value = abund_rare, fill=0) 
+nsi_wide <- nsi_wide[order(nsi_wide$sample),]
+nsi.matrix <-  as.matrix(nsi_wide[,-c(1)]) 
+row.names(nsi.matrix)<- paste0(nsi_wide$sample)
+nsi.matrix.nz <- nsi.matrix[,colSums(nsi.matrix)!=0] 
+#metadata data frame
+nsi_metadata <- nsi %>% select("sample", "date_utc", "twoseason","uniqcode")
+nsi_metadata <- distinct(nsi_metadata)
+nsi_metadata <- nsi_metadata[order(nsi_metadata$sample),]
+#make the BC matrix 
+nsi_bc <- vegdist(nsi.matrix.nz, method = "bray")
+nsi_bc_matrix <- as.matrix(nsi_bc)
+nsi_bc_df <- as.data.frame(nsi_bc_matrix)
+nsi_bc_df$sample <- rownames(nsi_bc_df)
+#left join the season / metadata again 
+nsi_bc_df$sample <- as.numeric(nsi_bc_df$sample)
+nsi_bc_wide <- nsi_bc_df %>% left_join(nsi_metadata)
+row.names(nsi_bc_wide) <- nsi_bc_wide$sample
+nsi_bc_wide <- nsi_bc_wide  %>%  arrange(date_utc)
+#write a csv file
+writexl::write_xlsx(nsi_bc_wide, "BCsimilarity_NSIwide_SurfaceWater.xlsx")
+```
+Create PHB Bray-Curtis dissimilarity matrix
+```{r}
+#Subset PHB
+phb <- diatoms_surf %>% select("sample", "abund_rare", "date_utc", "twoseason","uniqcode","GID") %>% filter(uniqcode %in% "PHB") %>%  arrange(date_utc)
+#ASV matrix
+phb_wide <- phb %>% select("sample", "abund_rare", "GID") %>% spread(key = GID, value = abund_rare, fill=0) 
+phb_wide <- phb_wide[order(phb_wide$sample),]
+phb.matrix <-  as.matrix(phb_wide[,-c(1)]) 
+row.names(phb.matrix)<- paste0(phb_wide$sample)
+phb.matrix.nz <- phb.matrix[,colSums(phb.matrix)!=0] 
+#metadata data frame
+phb_metadata <- phb %>% select("sample", "date_utc", "twoseason","uniqcode")
+phb_metadata <- distinct(phb_metadata)
+phb_metadata <- phb_metadata[order(phb_metadata$sample),]
+#make the BC matrix 
+phb_bc <- vegdist(phb.matrix.nz, method = "bray")
+phb_bc_matrix <- as.matrix(phb_bc)
+phb_bc_df <- as.data.frame(phb_bc_matrix)
+phb_bc_df$sample <- rownames(phb_bc_df)
+#left join the season / metadata again 
+phb_bc_df$sample <- as.numeric(phb_bc_df$sample)
+phb_bc_wide <- phb_bc_df %>% left_join(phb_metadata)
+row.names(phb_bc_wide) <- phb_bc_wide$sample
+phb_bc_wide <- phb_bc_wide  %>%  arrange(date_utc)
+#write a csv file
+writexl::write_xlsx(phb_bc_wide, "BCsimilarity_PHBwide_SurfaceWater.xlsx")
+```
+Create MAI Bray-Curtis dissimilarity matrix
+```{r}
+#Subset MAI
+mai <- diatoms_surf %>% select("sample", "abund_rare", "date_utc", "twoseason","uniqcode","GID") %>% filter(uniqcode %in% "MAI") %>%  arrange(date_utc)
+#ASV matrix
+mai_wide <- mai %>% select("sample", "abund_rare", "GID") %>% spread(key = GID, value = abund_rare, fill=0) 
+mai_wide <- mai_wide[order(mai_wide$sample),]
+mai.matrix <-  as.matrix(mai_wide[,-c(1)]) 
+row.names(mai.matrix)<- paste0(mai_wide$sample)
+mai.matrix.nz <- mai.matrix[,colSums(mai.matrix)!=0] 
+#metadata data frame
+mai_metadata <- mai %>% select("sample", "date_utc", "twoseason","uniqcode")
+mai_metadata <- distinct(mai_metadata)
+mai_metadata <- mai_metadata[order(mai_metadata$sample),]
+#make the BC matrix 
+mai_bc <- vegdist(mai.matrix.nz, method = "bray")
+mai_bc_matrix <- as.matrix(mai_bc)
+mai_bc_df <- as.data.frame(mai_bc_matrix)
+mai_bc_df$sample <- rownames(mai_bc_df)
+#left join the season / metadata again 
+mai_bc_df$sample <- as.numeric(mai_bc_df$sample)
+mai_bc_wide <- mai_bc_df %>% left_join(mai_metadata)
+row.names(mai_bc_wide) <- mai_bc_wide$sample
+mai_bc_wide <- mai_bc_wide  %>%  arrange(date_utc)
+#write a csv file
+writexl::write_xlsx(mai_bc_wide, "BCsimilarity_MAIwide_SurfaceWaters.xlsx")
+```
+2) Once you have modified all the file in excel and replaced the sample by the season you need to come back here and make them long format with first colum = season1 and the column name season2
+```{r}
+NSI_bc <- read_excel("~/PHD/CHAPTER1_BPAsequences_TimeSerie/BCsimilarity_NSIwide_SurfaceWaters.xlsx")
+## rename the first column season1 before to gather 
+names(NSI_bc)[names(NSI_bc) == "...1"] <- "season1"
+##gather the rest into season2
+colnames(NSI_bc)
+NSI_bc_long <- NSI_bc %>% gather(key="season2", value = 'similarity', 2:41)
+NSI_bc_long <- distinct(NSI_bc_long)
+write_csv(NSI_bc_long,"BCsim_long_NSI.csv")
+```
+```{r}
+PHB_bc <- read_excel("~/PHD/CHAPTER1_BPAsequences_TimeSerie/BCsimilarity_PHBwide_SurfaceWaters.xlsx")
+## rename the first column season1 before to gather 
+names(PHB_bc)[names(PHB_bc) == "...1"] <- "season1"
+##gather the rest into season2
+colnames(PHB_bc)
+PHB_bc_long <- PHB_bc %>% gather(key="season2", value = 'similarity', 2:39)
+PHB_bc_long <- distinct(PHB_bc_long)
+write_csv(PHB_bc_long,"BCsim_long_PHB.csv")
+```
+```{r}
+MAI_bc <- read_excel("~/PHD/CHAPTER1_BPAsequences_TimeSerie/BCsimilarity_MAIwide_SurfaceWater.xlsx")
+## rename the first column season1 before to gather 
+names(MAI_bc)[names(MAI_bc) == "...1"] <- "season1"
+##gather the rest into season2
+colnames(MAI_bc)
+MAI_bc_long <- MAI_bc %>% gather(key="season2", value = 'similarity', 2:47)
+MAI_bc_long <- distinct(MAI_bc_long)
+write_csv(MAI_bc_long,"BCsim_long_MAI.csv")
+```
+The following chunk of code is to determine the mean and sd similarity for 6month and yearly 
+```{r}
+#NSI
+nsi.av <- BCsim_long_NSI %>% group_by(seasons) %>% dplyr::summarise(mean = mean(similarity), sd = sd(similarity), max = max(similarity), min = min(similarity))
+#PHB
+phb.av <- BCsim_long_PHB %>% group_by(seasons) %>% dplyr::summarise(mean = mean(similarity), sd = sd(similarity), max = max(similarity), min = min(similarity))
+#MAI
+mai.av <- BCsim_long_MAI %>% group_by(seasons) %>% dplyr::summarise(mean = mean(similarity), sd = sd(similarity), max = max(similarity), min = min(similarity))
+```
