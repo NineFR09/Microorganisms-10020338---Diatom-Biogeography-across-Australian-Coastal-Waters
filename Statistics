@@ -160,7 +160,7 @@ permanova <- adonis2(t(com.matrix.nz) ~ uniqcode,
 perm.pairwise <- pairwise.adonis(t(com.matrix.nz), env.vars$uniqcode, 
                                  sim.function = "vegdist",
                                  sim.method = "bray",
-                                 p.adjust.m = "BH") ## x=OTU matrix not
+                                 p.adjust.m = "BH")
 
 ```
 
